@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "Product": {
+      "collection": "products",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "barcode": { "type": "string", "required": false },
+        "category": { "type": "string", "required": true },
+        "majorUnit": { "type": "string", "required": true },
+        "minorUnit": { "type": "string", "required": true },
+        "piecesPerMajorUnit": { "type": "number", "required": true },
+        "purchasePriceMinor": { "type": "number", "required": true },
+        "purchasePriceMajor": { "type": "number", "required": true },
+        "salePriceMinor": { "type": "number", "required": true },
+        "salePriceMajor": { "type": "number", "required": true },
+        "stockPieces": { "type": "number", "required": true },
+        "minStockAlert": { "type": "number", "required": true },
+        "defaultSupplierId": { "type": "string", "required": false },
+        "defaultSupplierName": { "type": "string", "required": false },
+        "notes": { "type": "string", "required": false },
+        "createdAt": { "type": "string", "required": true },
+        "updatedAt": { "type": "string", "required": true }
+      }
+    },
+    "Supplier": {
+      "collection": "suppliers",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "phone": { "type": "string", "required": false },
+        "company": { "type": "string", "required": false },
+        "address": { "type": "string", "required": false },
+        "balance": { "type": "number", "required": true },
+        "createdAt": { "type": "string", "required": true }
+      }
+    },
+    "Customer": {
+      "collection": "customers",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "phone": { "type": "string", "required": false },
+        "address": { "type": "string", "required": false },
+        "balance": { "type": "number", "required": true },
+        "createdAt": { "type": "string", "required": true }
+      }
+    },
+    "SaleInvoice": {
+      "collection": "sales",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "invoiceNumber": { "type": "string", "required": true },
+        "date": { "type": "string", "required": true },
+        "customerId": { "type": "string", "required": false },
+        "customerName": { "type": "string", "required": true },
+        "customerPhone": { "type": "string", "required": false },
+        "subtotal": { "type": "number", "required": true },
+        "discount": { "type": "number", "required": true },
+        "netAmount": { "type": "number", "required": true },
+        "totalCost": { "type": "number", "required": true },
+        "totalProfit": { "type": "number", "required": true },
+        "paidAmount": { "type": "number", "required": true },
+        "remainingAmount": { "type": "number", "required": true },
+        "paymentMethod": { "type": "string", "required": true },
+        "paymentStatus": { "type": "string", "required": true },
+        "notes": { "type": "string", "required": false }
+      }
+    },
+    "PurchaseInvoice": {
+      "collection": "purchases",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "invoiceNumber": { "type": "string", "required": true },
+        "date": { "type": "string", "required": true },
+        "supplierId": { "type": "string", "required": false },
+        "supplierName": { "type": "string", "required": true },
+        "supplierPhone": { "type": "string", "required": false },
+        "subtotal": { "type": "number", "required": true },
+        "discount": { "type": "number", "required": true },
+        "netAmount": { "type": "number", "required": true },
+        "paidAmount": { "type": "number", "required": true },
+        "remainingAmount": { "type": "number", "required": true },
+        "paymentMethod": { "type": "string", "required": true },
+        "paymentStatus": { "type": "string", "required": true },
+        "notes": { "type": "string", "required": false }
+      }
+    },
+    "StockMovement": {
+      "collection": "movements",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "productId": { "type": "string", "required": true },
+        "productName": { "type": "string", "required": true },
+        "date": { "type": "string", "required": true },
+        "type": { "type": "string", "required": true },
+        "quantityPieces": { "type": "number", "required": true },
+        "previousStock": { "type": "number", "required": true },
+        "newStock": { "type": "number", "required": true }
+      }
+    },
+    "StoreConfig": {
+      "collection": "settings",
+      "fields": {
+        "storeName": { "type": "string", "required": true },
+        "storeCurrency": { "type": "string", "required": true }
+      }
+    },
+    "OnlineStoreOrder": {
+      "collection": "online_orders",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "orderNumber": { "type": "string", "required": true },
+        "customerName": { "type": "string", "required": true },
+        "totalAmount": { "type": "number", "required": true },
+        "status": { "type": "string", "required": true }
+      }
+    }
+  }
+}

@@ -1,0 +1,385 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    font-family: 'Cairo', 'Tajawal', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* =========================================================
+   DARK MODE ENHANCEMENTS (High Contrast & Sharp Typography)
+   ========================================================= */
+html.dark body {
+  background-color: #0b1120;
+  color: #f8fafc;
+}
+
+html.dark .text-slate-400 {
+  color: #94a3b8;
+}
+
+html.dark .text-slate-300 {
+  color: #cbd5e1;
+}
+
+html.dark .text-slate-200 {
+  color: #e2e8f0;
+}
+
+/* =========================================================
+   LIGHT THEME (Crystal Clear, High-Contrast Light Mode)
+   ========================================================= */
+html.light body {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3);
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.5);
+}
+
+/* All background variants for light mode */
+html.light [class*="bg-slate-950"] {
+  background-color: #f8fafc !important;
+}
+
+html.light [class*="bg-slate-900"] {
+  background-color: #ffffff !important;
+}
+
+html.light [class*="bg-slate-850"] {
+  background-color: #f8fafc !important;
+}
+
+html.light [class*="bg-slate-800"] {
+  background-color: #f1f5f9 !important;
+}
+
+html.light [class*="bg-slate-750"],
+html.light [class*="bg-slate-700"] {
+  background-color: #e2e8f0 !important;
+}
+
+/* Ensure background gradients don't leave dark backgrounds in light mode */
+html.light [class*="bg-gradient-"] {
+  background-image: none !important;
+}
+
+/* Light Mode Borders */
+html.light [class*="border-slate-800"] {
+  border-color: #e2e8f0 !important;
+}
+
+html.light [class*="border-slate-700"] {
+  border-color: #cbd5e1 !important;
+}
+
+/* Light Mode Text High Contrast */
+html.light .text-white,
+html.light [class*="text-white"]:not(.keep-white) {
+  color: #0f172a !important;
+}
+
+html.light .text-slate-100,
+html.light [class*="text-slate-100"] {
+  color: #0f172a !important;
+}
+
+html.light .text-slate-200,
+html.light [class*="text-slate-200"] {
+  color: #1e293b !important;
+}
+
+html.light .text-slate-300,
+html.light [class*="text-slate-300"] {
+  color: #334155 !important;
+}
+
+html.light .text-slate-400,
+html.light [class*="text-slate-400"] {
+  color: #475569 !important;
+}
+
+html.light .text-slate-500,
+html.light [class*="text-slate-500"] {
+  color: #64748b !important;
+}
+
+/* Solid Colored Action Buttons in Light Mode (Retain White Text) */
+html.light .bg-emerald-600,
+html.light .bg-emerald-500,
+html.light .bg-blue-600,
+html.light .bg-blue-500,
+html.light .bg-rose-600,
+html.light .bg-rose-500,
+html.light .bg-amber-600,
+html.light .bg-purple-600,
+html.light .bg-indigo-600,
+html.light .bg-teal-600 {
+  color: #ffffff !important;
+}
+
+html.light .bg-emerald-600 *,
+html.light .bg-emerald-500 *,
+html.light .bg-blue-600 *,
+html.light .bg-blue-500 *,
+html.light .bg-rose-600 *,
+html.light .bg-rose-500 *,
+html.light .bg-amber-600 *,
+html.light .bg-purple-600 *,
+html.light .bg-indigo-600 *,
+html.light .bg-teal-600 * {
+  color: #ffffff !important;
+}
+
+/* Light mode form controls */
+html.light input:not([type="checkbox"]):not([type="radio"]),
+html.light select,
+html.light textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* High Contrast Colored Accent Badges in light mode */
+html.light .bg-emerald-500\/20,
+html.light .bg-emerald-500\/10,
+html.light [class*="bg-emerald-950"],
+html.light [class*="bg-emerald-900"] {
+  background-color: #d1fae5 !important;
+}
+html.light .text-emerald-400,
+html.light [class*="text-emerald-400"] {
+  color: #065f46 !important;
+  font-weight: 800 !important;
+}
+html.light .text-emerald-300,
+html.light .text-emerald-200,
+html.light [class*="text-emerald-300"],
+html.light [class*="text-emerald-200"] {
+  color: #064e3b !important;
+  font-weight: 800 !important;
+}
+html.light .border-emerald-500\/30,
+html.light .border-emerald-500\/40,
+html.light .border-emerald-500\/20,
+html.light [class*="border-emerald-800"],
+html.light [class*="border-emerald-900"] {
+  border-color: #6ee7b7 !important;
+}
+
+html.light .bg-blue-500\/20,
+html.light .bg-blue-500\/10,
+html.light [class*="bg-blue-950"],
+html.light [class*="bg-blue-900"] {
+  background-color: #dbeafe !important;
+}
+html.light .text-blue-400,
+html.light [class*="text-blue-400"] {
+  color: #1e40af !important;
+  font-weight: 800 !important;
+}
+html.light .text-blue-300,
+html.light .text-blue-200,
+html.light [class*="text-blue-300"],
+html.light [class*="text-blue-200"] {
+  color: #1e3a8a !important;
+  font-weight: 800 !important;
+}
+html.light .border-blue-500\/30,
+html.light .border-blue-500\/40,
+html.light [class*="border-blue-800"],
+html.light [class*="border-blue-900"] {
+  border-color: #93c5fd !important;
+}
+
+html.light .bg-amber-500\/20,
+html.light .bg-amber-500\/10,
+html.light [class*="bg-amber-950"],
+html.light [class*="bg-amber-900"] {
+  background-color: #fef3c7 !important;
+}
+html.light .text-amber-400,
+html.light [class*="text-amber-400"] {
+  color: #92400e !important;
+  font-weight: 800 !important;
+}
+html.light .text-amber-300,
+html.light .text-amber-200,
+html.light [class*="text-amber-300"],
+html.light [class*="text-amber-200"] {
+  color: #78350f !important;
+  font-weight: 800 !important;
+}
+html.light .border-amber-500\/30,
+html.light .border-amber-500\/40,
+html.light .border-amber-500\/50,
+html.light [class*="border-amber-800"],
+html.light [class*="border-amber-900"] {
+  border-color: #fcd34d !important;
+}
+
+html.light .bg-rose-500\/20,
+html.light .bg-rose-500\/10,
+html.light [class*="bg-rose-950"],
+html.light [class*="bg-rose-900"] {
+  background-color: #ffe4e6 !important;
+}
+html.light .text-rose-400,
+html.light [class*="text-rose-400"] {
+  color: #be123c !important;
+  font-weight: 800 !important;
+}
+html.light .text-rose-300,
+html.light .text-rose-200,
+html.light [class*="text-rose-300"],
+html.light [class*="text-rose-200"] {
+  color: #9f1239 !important;
+  font-weight: 800 !important;
+}
+html.light .border-rose-500\/30,
+html.light .border-rose-500\/40,
+html.light [class*="border-rose-800"],
+html.light [class*="border-rose-900"] {
+  border-color: #fda4af !important;
+}
+
+html.light .bg-purple-500\/20,
+html.light .bg-purple-500\/10 {
+  background-color: #faf5ff !important;
+}
+html.light .text-purple-400 {
+  color: #6d28d9 !important;
+  font-weight: 700 !important;
+}
+html.light .border-purple-500\/30 {
+  border-color: #e9d5ff !important;
+}
+
+/* =========================================================
+   CRYSTAL-CLEAR UNIT BADGES (High Contrast & Sharp Legibility)
+   ========================================================= */
+.unit-badge-sale {
+  background-color: rgba(6, 78, 59, 0.65);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+html.light .unit-badge-sale {
+  background-color: #d1fae5 !important;
+  color: #065f46 !important;
+  border-color: #6ee7b7 !important;
+  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.12) !important;
+}
+
+.unit-badge-purchase {
+  background-color: rgba(30, 58, 138, 0.65);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+html.light .unit-badge-purchase {
+  background-color: #dbeafe !important;
+  color: #1e40af !important;
+  border-color: #93c5fd !important;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.12) !important;
+}
+
+.unit-badge-neutral {
+  background-color: rgba(51, 65, 85, 0.65);
+  color: #e2e8f0;
+  border-color: rgba(100, 116, 139, 0.4);
+}
+
+html.light .unit-badge-neutral {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Light mode shadows & card borders */
+html.light .shadow-md,
+html.light .shadow-lg,
+html.light .shadow-xl,
+html.light .shadow-2xl {
+  box-shadow: 0 2px 8px -1px rgba(15, 23, 42, 0.08), 0 1px 3px -1px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* Modal dark overlay backdrop in light mode */
+html.light .bg-black\/80 {
+  background-color: rgba(15, 23, 42, 0.55) !important;
+}
+
+/* Recharts Tooltips in Light Mode */
+html.light .recharts-default-tooltip {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+}
+html.light .recharts-tooltip-item {
+  color: #0f172a !important;
+}
+html.light .recharts-tooltip-label {
+  color: #334155 !important;
+}
+
+/* Smooth transitions for theme switching */
+body, header, nav, main, div, button, input, select, textarea {
+  transition-property: background-color, border-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Print specific styles */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .printable-area, .printable-area * {
+    visibility: visible;
+  }
+  .printable-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white !important;
+    color: black !important;
+    padding: 20px;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+

@@ -1,0 +1,6 @@
+{
+  "name": "مخزون فريدون",
+  "description": "تطبيق متكامل لإدارة المخزون، أسعار الشراء والبيع، تتبع الأرباح والمبيعات بالدينار الجزائري، تنبيهات انخفاض المخزون، وإصدار الفواتير والتقارير.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
