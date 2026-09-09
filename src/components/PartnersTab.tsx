@@ -88,17 +88,74 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
   // Statement Drawer Modal
   const [statementPartner, setStatementPartner] = useState<{ type: 'supplier' | 'customer'; data: Supplier | Customer } | null>(null);
 
-  // Filtered lists
-  const filteredSuppliers = suppliers.filter(s =>
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (s.phone && s.phone.includes(searchQuery)) ||
-    (s.company && s.company.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Filtered and sorted lists
+  const cleanSearch = searchQuery.trim().toLowerCase();
+  const isSearching = cleanSearch.length > 0;
 
-  const filteredCustomers = customers.filter(c =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (c.phone && c.phone.includes(searchQuery))
-  );
+  // Counts of zero-balance partners
+  const zeroBalanceSuppliersCount = suppliers.filter(s => Math.abs(Number(s.balance) || 0) <= 0.001).length;
+  const zeroBalanceCustomersCount = customers.filter(c => Math.abs(Number(c.balance) || 0) <= 0.001).length;
+
+  // Filtered Suppliers:
+  // 1. If not searching, hide records with 0 balance
+  // 2. If searching, show all matching records including 0 balance
+  // 3. Sort from highest balance/price down to lowest
+  const filteredSuppliers = suppliers
+    .filter(s => {
+      const matchesSearch = !isSearching || (
+        s.name.toLowerCase().includes(cleanSearch) ||
+        (s.phone && s.phone.includes(cleanSearch)) ||
+        (s.company && s.company.toLowerCase().includes(cleanSearch)) ||
+        (s.address && s.address.toLowerCase().includes(cleanSearch))
+      );
+
+      if (!matchesSearch) return false;
+
+      // If search box is empty, hide zero-balance suppliers
+      if (!isSearching) {
+        return Math.abs(Number(s.balance) || 0) > 0.001;
+      }
+
+      return true;
+    })
+    .sort((a, b) => {
+      const balA = Number(a.balance) || 0;
+      const balB = Number(b.balance) || 0;
+      if (balB !== balA) {
+        return balB - balA; // From highest down
+      }
+      return a.name.localeCompare(b.name, 'ar');
+    });
+
+  // Filtered Customers:
+  // 1. If not searching, hide records with 0 balance
+  // 2. If searching, show all matching records including 0 balance
+  // 3. Sort from highest balance/price down to lowest
+  const filteredCustomers = customers
+    .filter(c => {
+      const matchesSearch = !isSearching || (
+        c.name.toLowerCase().includes(cleanSearch) ||
+        (c.phone && c.phone.includes(cleanSearch)) ||
+        (c.address && c.address.toLowerCase().includes(cleanSearch))
+      );
+
+      if (!matchesSearch) return false;
+
+      // If search box is empty, hide zero-balance customers
+      if (!isSearching) {
+        return Math.abs(Number(c.balance) || 0) > 0.001;
+      }
+
+      return true;
+    })
+    .sort((a, b) => {
+      const balA = Number(a.balance) || 0;
+      const balB = Number(b.balance) || 0;
+      if (balB !== balA) {
+        return balB - balA; // From highest down
+      }
+      return a.name.localeCompare(b.name, 'ar');
+    });
 
   // Supplier Add / Edit
   const openAddSupplier = () => {
@@ -196,7 +253,11 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
           <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
           <input
             type="text"
-            placeholder={partnerType === 'suppliers' ? "بحث في الموردين بالاسم أو الهاتف..." : "بحث في العملاء بالاسم أو الهاتف..."}
+            placeholder={
+              partnerType === 'suppliers' 
+                ? "بحث في الموردين (اكتب هنا للبحث وإظهار الأرصدة 0)..." 
+                : "بحث في العملاء (اكتب هنا للبحث وإظهار الأرصدة 0)..."
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
@@ -238,16 +299,62 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
         </div>
       </div>
 
+      {/* Active Sort & Zero-Balance Visibility Indicator */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 border border-slate-700/80 font-bold text-[11px] shadow-sm">
+            <span className="text-amber-400 font-black">↓</span>
+            <span>مرتب تنازلياً من أعلى رصيد للأدنى</span>
+          </span>
+
+          {!isSearching && (partnerType === 'suppliers' ? zeroBalanceSuppliersCount : zeroBalanceCustomersCount) > 0 && (
+            <span className="text-[11px] text-amber-300/90 flex items-center gap-1.5 bg-amber-950/40 px-2.5 py-1 rounded-lg border border-amber-600/30">
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>
+              <span>
+                تم إخفاء {partnerType === 'suppliers' ? zeroBalanceSuppliersCount : zeroBalanceCustomersCount} حساب رصيدهم 0 (اكتب في البحث لعرضهم)
+              </span>
+            </span>
+          )}
+
+          {isSearching && (
+            <span className="text-[11px] text-emerald-300 flex items-center gap-1.5 bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-600/30">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+              <span>
+                عرض نتائج البحث بما فيها الأرصدة 0 ({partnerType === 'suppliers' ? filteredSuppliers.length : filteredCustomers.length} نتيجة)
+              </span>
+            </span>
+          )}
+        </div>
+
+        <span className="text-[11px] text-slate-400 font-mono">
+          معروض: {partnerType === 'suppliers' ? filteredSuppliers.length : filteredCustomers.length} من {partnerType === 'suppliers' ? suppliers.length : customers.length}
+        </span>
+      </div>
+
       {/* Partners List */}
       {partnerType === 'suppliers' ? (
         /* Suppliers List */
         <div className="space-y-3">
           {filteredSuppliers.length === 0 ? (
-            <div className="text-center py-10 text-slate-500 text-xs bg-slate-850 rounded-2xl border border-slate-800 p-6">
-              لا يوجد موردين مطابقين للبحث
+            <div className="text-center py-10 text-slate-400 text-xs bg-slate-850 rounded-2xl border border-slate-800 p-6 space-y-2">
+              {isSearching ? (
+                <>
+                  <p className="font-bold text-slate-300">لا يوجد موردين مطابقين للبحث "{searchQuery}"</p>
+                  <p className="text-[11px] text-slate-500">تأكد من كتابة الاسم أو رقم الهاتف بشكل صحيح.</p>
+                </>
+              ) : suppliers.length > 0 && zeroBalanceSuppliersCount === suppliers.length ? (
+                <>
+                  <p className="font-bold text-slate-300">جميع الموردين ({suppliers.length}) رصيدهم 0 (خالص الحساب)</p>
+                  <p className="text-[11px] text-slate-400">
+                    تم إخفاؤهم تلقائياً. اكتب اسم المورد في خانة البحث أعلاه لإظهار بطاقته وكشف حسابه فوراً.
+                  </p>
+                </>
+              ) : (
+                <p className="text-slate-500">لا يوجد موردين مطابقين للبحث</p>
+              )}
             </div>
           ) : (
-            filteredSuppliers.map((supplier) => {
+            filteredSuppliers.map((supplier, idx) => {
               const supplierPurchases = purchases.filter(p => p.supplierId === supplier.id || p.supplierName === supplier.name);
               const totalPurchasedFrom = supplierPurchases.reduce((acc, p) => acc + p.netAmount, 0);
 
@@ -259,8 +366,8 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
-                          <Building className="w-4 h-4" />
+                        <div className={`w-8 h-8 rounded-xl ${supplier.balance > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'} flex items-center justify-center font-black text-xs shrink-0`}>
+                          #{idx + 1}
                         </div>
                         <div>
                           <h3 className="font-bold text-sm text-white">{supplier.name}</h3>
@@ -317,8 +424,8 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
 
                     <div className="text-left">
                       <span className="text-[11px] text-slate-400 block">رصيد الحساب المالي:</span>
-                      <span className={`font-bold ${supplier.balance > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
-                        {supplier.balance > 0 ? `مستحق له: ${formatCurrency(supplier.balance, currency)}` : 'خالص الحساب'}
+                      <span className={`font-bold ${supplier.balance > 0 ? 'text-amber-400 font-mono' : 'text-slate-400'}`}>
+                        {supplier.balance > 0 ? `مستحق له: ${formatCurrency(supplier.balance, currency)}` : 'خالص الحساب (0)'}
                       </span>
                     </div>
                   </div>
@@ -349,11 +456,25 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
         /* Customers List */
         <div className="space-y-3">
           {filteredCustomers.length === 0 ? (
-            <div className="text-center py-10 text-slate-500 text-xs bg-slate-850 rounded-2xl border border-slate-800 p-6">
-              لا يوجد عملاء مطابقين للبحث
+            <div className="text-center py-10 text-slate-400 text-xs bg-slate-850 rounded-2xl border border-slate-800 p-6 space-y-2">
+              {isSearching ? (
+                <>
+                  <p className="font-bold text-slate-300">لا يوجد عملاء مطابقين للبحث "{searchQuery}"</p>
+                  <p className="text-[11px] text-slate-500">تأكد من كتابة الاسم أو رقم الهاتف بشكل صحيح.</p>
+                </>
+              ) : customers.length > 0 && zeroBalanceCustomersCount === customers.length ? (
+                <>
+                  <p className="font-bold text-slate-300">جميع العملاء ({customers.length}) رصيدهم 0 (خالص الحساب)</p>
+                  <p className="text-[11px] text-slate-400">
+                    تم إخفاؤهم تلقائياً. اكتب اسم العميل في خانة البحث أعلاه لإظهار بطاقته وكشف حسابه فوراً.
+                  </p>
+                </>
+              ) : (
+                <p className="text-slate-500">لا يوجد عملاء مطابقين للبحث</p>
+              )}
             </div>
           ) : (
-            filteredCustomers.map((customer) => {
+            filteredCustomers.map((customer, idx) => {
               const customerSales = sales.filter(s => s.customerId === customer.id || s.customerName === customer.name);
               const totalPurchasedBy = customerSales.reduce((acc, s) => acc + s.netAmount, 0);
 
@@ -365,8 +486,8 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                          <UserCheck className="w-4 h-4" />
+                        <div className={`w-8 h-8 rounded-xl ${customer.balance > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'} flex items-center justify-center font-black text-xs shrink-0`}>
+                          #{idx + 1}
                         </div>
                         <div>
                           <h3 className="font-bold text-sm text-white">{customer.name}</h3>
@@ -420,8 +541,8 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
 
                     <div className="text-left">
                       <span className="text-[11px] text-slate-400 block">الرصيد والذمم:</span>
-                      <span className={`font-bold ${customer.balance > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
-                        {customer.balance > 0 ? `مطلوب منه: ${formatCurrency(customer.balance, currency)}` : 'خالص الحساب'}
+                      <span className={`font-bold ${customer.balance > 0 ? 'text-amber-400 font-mono' : 'text-slate-400'}`}>
+                        {customer.balance > 0 ? `مطلوب منه: ${formatCurrency(customer.balance, currency)}` : 'خالص الحساب (0)'}
                       </span>
                     </div>
                   </div>

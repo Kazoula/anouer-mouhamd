@@ -1,9 +1,17 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Search, X, Check, CheckCircle2, Package, AlertTriangle, ArrowUpDown, Tag, Keyboard, ChevronDown, Plus, ShoppingCart, ArrowRight, Maximize2, Clock, Timer } from 'lucide-react';
+import { Search, X, Check, CheckCircle2, Package, AlertTriangle, ArrowUpDown, Tag, Keyboard, ChevronDown, Plus, ShoppingCart, ArrowRight, ArrowLeft, Maximize2, Clock, Timer, RotateCcw } from 'lucide-react';
 import { Product } from '../types';
 import { formatCurrency } from '../utils/calculations';
 import { isDualUnitProduct, getPrimaryUnit, hasThreeUnits, getProductUnitsList } from '../utils/unitHelpers';
 import { saveAppPreferencesToFirestore } from '../services/firestoreService';
+
+export interface CartItemSummary {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitName?: string;
+  unitType?: string;
+}
 
 interface SearchableProductSelectProps {
   products: Product[];
@@ -22,6 +30,9 @@ interface SearchableProductSelectProps {
   cartItemsCount?: number;
   isOpenBigWindow?: boolean;
   onCloseBigWindow?: () => void;
+  cartItems?: CartItemSummary[];
+  onUpdateCartItemQuantity?: (productId: string, unitType: 'minor' | 'middle' | 'major', delta: number) => void;
+  openAllProductsTrigger?: number;
 }
 
 // Normalize Arabic letters for fuzzy search
@@ -52,14 +63,23 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
   cartItemsCount = 0,
   isOpenBigWindow = false,
   onCloseBigWindow,
+  cartItems = [],
+  onUpdateCartItemQuantity,
+  openAllProductsTrigger,
 }) => {
   // Keep list closed initially until the user types or explicitly opens it
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [query, setQuery] = useState<string>('');
+  const [lastSearchedQuery, setLastSearchedQuery] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('pos_last_product_search') || '';
+    }
+    return '';
+  });
   const [highlightedIndex, setHighlightedIndex] = useState<number>(0);
   const [isInputFocused, setIsInputFocused] = useState<boolean>(false);
   const [isFullScreenResults, setIsFullScreenResults] = useState<boolean>(false);
-  const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
+  const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock' | 'in_cart'>('all');
   const [lastAddedName, setLastAddedName] = useState<string | null>(null);
 
   // User configurable typing delay in seconds (default: 3.5 seconds - "بضع ثوانٍ")
@@ -122,6 +142,39 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
     setIsTyping(false);
   };
 
+  // Whenever user types a non-empty query, remember it for returning to previous items
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length > 0) {
+      setLastSearchedQuery(trimmed);
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('pos_last_product_search', trimmed);
+      }
+    }
+  }, [query]);
+
+  // When explicitly triggered to search and add another item (e.g. "+ بحث وإضافة صنف آخر للفاتورة"):
+  // Opens on all products with query cleared and stock filter set to all
+  useEffect(() => {
+    if (openAllProductsTrigger && openAllProductsTrigger > 0) {
+      setQuery('');
+      setStockFilter('all');
+      setIsOpen(true);
+      setIsFullScreenResults(true);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 60);
+    }
+  }, [openAllProductsTrigger]);
+
+  // When big window opens: ensure it displays open results
+  useEffect(() => {
+    if (isOpenBigWindow) {
+      setIsOpen(true);
+      setIsFullScreenResults(true);
+    }
+  }, [isOpenBigWindow]);
+
   // Give the user a few seconds (default 3.5s) to type the product comfortably.
   // Every keystroke resets the countdown timer so they can type uninterrupted.
   useEffect(() => {
@@ -168,21 +221,25 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
 
   const prevSelectedIdRef = useRef<string>(selectedProductId);
 
-  // When selectedProductId resets (e.g. item inserted into cart), clear query and close list so search frame is alone
+  // When selectedProductId resets (e.g. item inserted into cart):
+  // Preserve the search query (e.g. "mamia") so the user can continue selecting other varieties!
   useEffect(() => {
     if (!selectedProductId) {
-      setQuery('');
-      setIsOpen(false);
       if (prevSelectedIdRef.current) {
+        // Just added an item! Keep query and keep results open so varieties remain selectable
+        if (query.trim().length > 0) {
+          setIsOpen(true);
+        }
         setTimeout(() => {
           containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }, 60);
       }
     } else {
+      // Product selected for quantity/unit configuration
       setIsOpen(false);
     }
     prevSelectedIdRef.current = selectedProductId;
-  }, [selectedProductId]);
+  }, [selectedProductId, query]);
 
   // Color classes depending on mode/accent
   const isEmerald = accentColor === 'emerald';
@@ -243,18 +300,38 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
     });
   }, [products, query]);
 
-  // Pre-calculate stock counts
+  // Pre-calculate stock and cart counts
   const inStockCount = useMemo(() => products.filter(p => p.stockPieces > 0).length, [products]);
   const outOfStockCount = useMemo(() => products.filter(p => p.stockPieces <= 0).length, [products]);
+  const inCartProductsCount = useMemo(() => {
+    if (!cartItems || cartItems.length === 0) return 0;
+    return products.filter(p => cartItems.some(ci => ci.productId === p.id)).length;
+  }, [products, cartItems]);
+
+  // Helper to check how many pieces/units of a product are currently in the cart
+  const getProductCartInfo = (prodId: string) => {
+    if (!cartItems || cartItems.length === 0) return null;
+    const itemsInCart = cartItems.filter(i => i.productId === prodId);
+    if (itemsInCart.length === 0) return null;
+    const totalQty = itemsInCart.reduce((sum, i) => sum + i.quantity, 0);
+    return {
+      count: itemsInCart.length,
+      totalQty,
+      items: itemsInCart,
+    };
+  };
 
   // Combined query + stock filter for display
   const displayedProducts = useMemo(() => {
     return filteredProducts.filter(p => {
+      if (stockFilter === 'in_cart') {
+        return cartItems?.some(item => item.productId === p.id);
+      }
       if (stockFilter === 'in_stock') return p.stockPieces > 0;
       if (stockFilter === 'out_of_stock') return p.stockPieces <= 0;
       return true;
     });
-  }, [filteredProducts, stockFilter]);
+  }, [filteredProducts, stockFilter, cartItems]);
 
   // Close dropdown on outside click ONLY if a product is already selected
   useEffect(() => {
@@ -316,7 +393,7 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
     onSelectProduct(prodId);
     setIsOpen(false);
     setIsFullScreenResults(false);
-    setQuery('');
+    // Keep query so user can return to their search
     onCloseBigWindow?.();
   };
 
@@ -328,11 +405,13 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
     }
     setLastAddedName(prod.name);
     setTimeout(() => setLastAddedName(null), 3500);
-    setQuery('');
-    setIsOpen(false);
-    setIsFullScreenResults(false);
-    setIsInputFocused(false);
-    onCloseBigWindow?.();
+
+    // CRITICAL: DO NOT wipe query and DO NOT close the search window!
+    // The user explicitly requested to stay in this window to pick other varieties (e.g. Mamia and its varieties)!
+    if (query.trim().length > 0) {
+      setIsOpen(true);
+    }
+    // We intentionally do NOT call onCloseBigWindow() here so the window stays active for multi-item selection
   };
 
   const handleClearSelection = (e: React.MouseEvent) => {
@@ -386,14 +465,13 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
             onClick={() => {
               setIsFullScreenResults(false);
               setIsOpen(false);
-              setQuery('');
               onCloseBigWindow?.();
               onKeyboardDismiss?.();
             }}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs font-black transition-all active:scale-95 cursor-pointer shadow-sm shrink-0"
           >
             <ArrowRight className="w-4 h-4 text-emerald-400" />
-            <span>رجوع</span>
+            <span>{cartItemsCount > 0 ? 'عرض الفاتورة' : 'رجوع'}</span>
             {cartItemsCount > 0 && (
               <span className="bg-emerald-500 text-slate-950 font-mono px-2 py-0.5 rounded-full text-[11px] font-black mr-1 shadow-sm">
                 {cartItemsCount}
@@ -454,7 +532,24 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
             )}
           </div>
 
-          {/* Quick Filter Chips: All, In Stock, Out of Stock */}
+          {/* Quick Return to Previous Searched Items (e.g. mamia and its varieties) */}
+          {lastSearchedQuery && query !== lastSearchedQuery && (
+            <div className="flex items-center gap-2 pt-0.5 animate-in fade-in duration-150">
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery(lastSearchedQuery);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-95 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold transition-all shadow-xs cursor-pointer"
+                title={`الرجوع إلى بحث "${lastSearchedQuery}"`}
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
+                <span>الرجوع لبحث الأصناف السابقة: <strong className="text-white">"{lastSearchedQuery}"</strong></span>
+              </button>
+            </div>
+          )}
+
+          {/* Quick Filter Chips: All, In Stock, Out of Stock, In Cart */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar text-xs font-bold">
             <button
               type="button"
@@ -467,6 +562,21 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
             >
               كافة الأصناف ({products.length})
             </button>
+
+            {cartItems && cartItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setStockFilter('in_cart')}
+                className={`px-3.5 py-1.5 rounded-xl transition-all border whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  stockFilter === 'in_cart'
+                    ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm font-black'
+                    : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>الأصناف المختارة بالفاتورة ({inCartProductsCount})</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -529,7 +639,7 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
               </div>
             </div>
           ) : (
-            displayedProducts.slice(0, 100).map((prod) => {
+            displayedProducts.slice(0, 250).map((prod) => {
               const hasDualUnits = isDualUnitProduct(prod) && 
                 (mode === 'sale' 
                   ? prod.salePriceMajor > 0 && prod.salePriceMajor !== prod.salePriceMinor 
@@ -541,27 +651,42 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                 : (prod.purchasePriceMajor > 0 ? prod.purchasePriceMajor : prod.purchasePriceMinor);
 
               const matchTag = getMatchHighlight(prod);
+              const cartInfo = getProductCartInfo(prod.id);
 
               return (
                 <div
                   key={prod.id}
                   onClick={() => handleItemDirectAdd(prod, hasDualUnits ? 'minor' : 'major')}
-                  className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/60 transition-all cursor-pointer shadow-md dark:shadow-lg active:scale-[0.99]"
+                  className={`p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border transition-all cursor-pointer shadow-md dark:shadow-lg active:scale-[0.99] ${
+                    cartInfo 
+                      ? 'border-emerald-500/70 dark:border-emerald-500/60 ring-1 ring-emerald-500/30' 
+                      : 'border-slate-200 dark:border-slate-800 hover:border-emerald-500/60'
+                  }`}
                 >
                   {/* Top Row: Name and Stock */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold ${
-                        isEmerald 
+                        cartInfo
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : isEmerald 
                           ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40' 
                           : 'bg-blue-100 text-blue-800 border border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/40'
                       }`}>
-                        <Package className="w-4 h-4" />
+                        {cartInfo ? <Check className="w-4 h-4 stroke-[3]" /> : <Package className="w-4 h-4" />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h4 className="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-snug break-words">
-                          {prod.name}
-                        </h4>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-snug break-words">
+                            {prod.name}
+                          </h4>
+                          {cartInfo && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-2xs">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>مضاف بالفاتورة ({cartInfo.totalQty})</span>
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
                           {matchTag}
                           <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-300 dark:border-slate-700 shadow-2xs">
@@ -601,6 +726,7 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                       if (units.length === 1) {
                         const u = units[0];
                         const price = mode === 'sale' ? u.salePrice : u.purchasePrice;
+                        const singleCartItem = cartItems?.find(ci => ci.productId === prod.id);
                         return (
                           <button
                             type="button"
@@ -609,14 +735,18 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                               handleItemDirectAdd(prod, u.type);
                             }}
                             className={`w-full py-2.5 px-3.5 rounded-xl font-black text-xs sm:text-sm flex items-center justify-between transition-all shadow-md cursor-pointer ${
-                              isEmerald
+                              singleCartItem
+                                ? 'bg-emerald-700 hover:bg-emerald-600 active:scale-[0.99] text-white shadow-emerald-950/50'
+                                : isEmerald
                                 ? 'bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white shadow-emerald-950/50'
                                 : 'bg-blue-600 hover:bg-blue-500 active:scale-[0.99] text-white shadow-blue-950/50'
                             }`}
                           >
                             <span className="flex items-center gap-1.5 text-white">
                               <Plus className="w-4 h-4 stroke-[3] text-white" />
-                              <span className="text-white font-extrabold">إدراج بالفاتورة</span>
+                              <span className="text-white font-extrabold">
+                                {singleCartItem ? `إضافة قطعة أخرى (مضاف: ${singleCartItem.quantity})` : 'إدراج بالفاتورة'}
+                              </span>
                             </span>
                             <span className="font-mono text-xs sm:text-sm font-black text-white">
                               {formatCurrency(price, currency)} / {u.name}
@@ -631,8 +761,11 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                             const price = mode === 'sale' ? u.salePrice : u.purchasePrice;
                             const isMinor = u.type === 'minor';
                             const isMiddle = u.type === 'middle';
+                            const unitCartItem = cartItems?.find(ci => ci.productId === prod.id && ci.unitType === u.type);
 
-                            const colorClasses = isMinor
+                            const colorClasses = unitCartItem
+                              ? 'bg-emerald-900/50 border-emerald-500 text-emerald-200 ring-1 ring-emerald-500/50 font-black'
+                              : isMinor
                               ? isEmerald
                                 ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-950 dark:bg-emerald-950/80 dark:hover:bg-emerald-900/90 dark:border-emerald-500/50 dark:text-emerald-200'
                                 : 'bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-950 dark:bg-blue-950/80 dark:hover:bg-blue-900/90 dark:border-blue-500/50 dark:text-blue-200'
@@ -651,7 +784,15 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                                 className={`py-2 px-1.5 sm:px-2.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center transition-all border cursor-pointer shadow-xs ${colorClasses}`}
                               >
                                 <span className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold truncate max-w-full">
-                                  {isMinor ? <Plus className="w-3 h-3 stroke-[3]" /> : <Package className="w-3 h-3" />}
+                                  {unitCartItem ? (
+                                    <span className="text-[10px] text-emerald-300 font-mono font-black bg-emerald-500/30 px-1 rounded">
+                                      ✓ {unitCartItem.quantity}
+                                    </span>
+                                  ) : isMinor ? (
+                                    <Plus className="w-3 h-3 stroke-[3]" />
+                                  ) : (
+                                    <Package className="w-3 h-3" />
+                                  )}
                                   <span className="truncate">بالـ {u.name} {u.ratio > 1 ? `(${u.ratio})` : ''}</span>
                                 </span>
                                 <span className="font-mono font-black text-xs sm:text-sm text-slate-900 dark:text-white mt-0.5">
@@ -679,7 +820,7 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
 
         {/* Floating Notification Pill when item is added */}
         {lastAddedName && (
-          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[140] bg-slate-900/95 border border-emerald-500/80 shadow-[0_10px_35px_rgba(0,0,0,0.8)] px-4 py-2.5 rounded-2xl flex items-center gap-3 backdrop-blur-md animate-in fade-in slide-in-from-bottom-3 duration-200 max-w-[90vw]">
+          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[150] bg-slate-900/95 border border-emerald-500/80 shadow-[0_10px_35px_rgba(0,0,0,0.8)] px-4 py-2.5 rounded-2xl flex items-center gap-3 backdrop-blur-md animate-in fade-in slide-in-from-bottom-3 duration-200 max-w-[90vw]">
             <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
             <div className="text-xs font-bold text-slate-100 truncate">
               تمت إضافة <span className="text-emerald-300 font-black">"{lastAddedName}"</span> للفاتورة
@@ -695,6 +836,29 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
               className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-md shrink-0 cursor-pointer"
             >
               عرض الفاتورة
+            </button>
+          </div>
+        )}
+
+        {/* Persistent bottom bar to view invoice when cart has items and no notification is showing */}
+        {!lastAddedName && cartItemsCount > 0 && (
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[140] bg-slate-900/95 border border-emerald-500/50 shadow-2xl px-4 py-2 rounded-2xl flex items-center gap-3 backdrop-blur-md max-w-[92vw] animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
+              <ShoppingCart className="w-4 h-4 text-emerald-400" />
+              <span>أصناف الفاتورة: <strong className="text-emerald-300 font-mono font-black">{cartItemsCount}</strong></span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsFullScreenResults(false);
+                setIsOpen(false);
+                onCloseBigWindow?.();
+                onKeyboardDismiss?.();
+              }}
+              className="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs px-3 py-1.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>إظهار الفاتورة</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
@@ -859,7 +1023,6 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                   type="button"
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    setQuery('');
                     setIsOpen(false);
                     inputRef.current?.blur();
                     setIsInputFocused(false);
@@ -867,7 +1030,6 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                   }}
                   onTouchStart={(e) => {
                     e.preventDefault();
-                    setQuery('');
                     setIsOpen(false);
                     inputRef.current?.blur();
                     setIsInputFocused(false);
@@ -909,6 +1071,24 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
               )}
             </div>
           </div>
+
+          {/* Quick Return to Previous Searched Query (e.g. mamia and its varieties) */}
+          {lastSearchedQuery && query !== lastSearchedQuery && (
+            <div className="flex items-center gap-2 pt-1.5 px-1 animate-in fade-in duration-150">
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery(lastSearchedQuery);
+                  setIsOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-95 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title={`الرجوع لبحث "${lastSearchedQuery}"`}
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
+                <span>الرجوع لبحث الأصناف السابقة: <strong className="text-white">"{lastSearchedQuery}"</strong></span>
+              </button>
+            </div>
+          )}
 
           {/* Quick Helper Subtitle */}
           <div className="flex items-center justify-between px-2 pt-2 text-[11px] text-slate-400">
@@ -1064,15 +1244,28 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                 ? (prod.salePriceMajor > 0 ? prod.salePriceMajor : prod.salePriceMinor)
                 : (prod.purchasePriceMajor > 0 ? prod.purchasePriceMajor : prod.purchasePriceMinor);
 
+              const cartInfo = getProductCartInfo(prod.id);
+
               return (
                 <div
                   key={prod.id}
                   onClick={() => handleItemDirectAdd(prod, hasDualUnits ? 'minor' : 'major')}
-                  className="p-3 rounded-2xl cursor-pointer transition-all border bg-white dark:bg-slate-850/90 hover:bg-slate-50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200 shadow-xs"
+                  className={`p-3 rounded-2xl cursor-pointer transition-all border shadow-xs ${
+                    cartInfo
+                      ? 'bg-emerald-950/40 border-emerald-500/60 ring-1 ring-emerald-500/30 text-white'
+                      : 'bg-white dark:bg-slate-850/90 hover:bg-slate-50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-200'
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h4 className="font-bold text-slate-900 dark:text-white text-xs leading-snug">{prod.name}</h4>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="font-bold text-slate-900 dark:text-white text-xs leading-snug">{prod.name}</h4>
+                        {cartInfo && (
+                          <span className="text-[10px] font-black text-emerald-300 bg-emerald-500/25 px-1.5 py-0.2 rounded border border-emerald-500/40">
+                            ✓ بالفاتورة ({cartInfo.totalQty})
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-0.5">
                         المتوفر: {prod.stockPieces} {primaryUnit}
                       </div>

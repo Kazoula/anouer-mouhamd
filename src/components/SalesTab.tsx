@@ -94,6 +94,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   const [saleStep, setSaleStep] = useState<1 | 2>(1);
   const [step2SubView, setStep2SubView] = useState<'search' | 'invoice'>('search');
   const [isBigSearchOpen, setIsBigSearchOpen] = useState<boolean>(false);
+  const [openAllProductsTrigger, setOpenAllProductsTrigger] = useState<number>(0);
   const [directAddToast, setDirectAddToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
 
   // DOM Refs for seamless mobile navigation
@@ -319,6 +320,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   };
 
   const handleSwitchToSearch = () => {
+    setOpenAllProductsTrigger(prev => prev + 1);
     setIsBigSearchOpen(true);
     setStep2SubView('search');
     setTimeout(() => {
@@ -850,7 +852,10 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                           <div className="flex items-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => setIsBigSearchOpen(true)}
+                              onClick={() => {
+                                setOpenAllProductsTrigger(prev => prev + 1);
+                                setIsBigSearchOpen(true);
+                              }}
                               className="text-[11px] font-extrabold text-emerald-300 bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-1 rounded-xl hover:bg-emerald-500/30 transition-all flex items-center gap-1 cursor-pointer shadow-sm"
                               title="فتح النافذة الكبيرة للبحث بما في ذلك الأصناف النافدة"
                             >
@@ -886,8 +891,10 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                             onKeyboardDismiss={handleDismissKeyboardAndShowInvoice}
                             hasCartItems={cartItems.length > 0}
                             cartItemsCount={cartItems.length}
+                            cartItems={cartItems.map(ci => ({ productId: ci.productId, quantity: ci.quantity, unitType: ci.unitType }))}
                             isOpenBigWindow={isBigSearchOpen}
                             onCloseBigWindow={handleCloseBigSearch}
+                            openAllProductsTrigger={openAllProductsTrigger}
                           />
                         </div>
 
