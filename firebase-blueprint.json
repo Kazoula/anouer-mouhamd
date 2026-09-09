@@ -115,6 +115,15 @@
         "totalAmount": { "type": "number", "required": true },
         "status": { "type": "string", "required": true }
       }
+    },
+    "AppPreferences": {
+      "collection": "settings",
+      "fields": {
+        "searchTypingDelaySec": { "type": "number", "required": false },
+        "theme": { "type": "string", "required": false },
+        "currency": { "type": "string", "required": false },
+        "updatedAt": { "type": "string", "required": false }
+      }
     }
   }
 }

@@ -3,6 +3,7 @@ import { Search, X, Check, CheckCircle2, Package, AlertTriangle, ArrowUpDown, Ta
 import { Product } from '../types';
 import { formatCurrency } from '../utils/calculations';
 import { isDualUnitProduct, getPrimaryUnit, hasThreeUnits, getProductUnitsList } from '../utils/unitHelpers';
+import { saveAppPreferencesToFirestore } from '../services/firestoreService';
 
 interface SearchableProductSelectProps {
   products: Product[];
@@ -78,6 +79,17 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(3.5);
   const [showDelaySettings, setShowDelaySettings] = useState<boolean>(false);
+
+  // Sync typing delay across devices and components via custom event
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e?.detail !== undefined && typeof e.detail === 'number') {
+        setTypingDelaySec(e.detail);
+      }
+    };
+    window.addEventListener('pos_typing_delay_changed', handler);
+    return () => window.removeEventListener('pos_typing_delay_changed', handler);
+  }, []);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -991,6 +1003,10 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                           setTypingDelaySec(opt.val);
                           if (typeof window !== 'undefined') {
                             localStorage.setItem('pos_search_typing_delay_sec', String(opt.val));
+                            // Sync preference immediately to Firestore for cross-device consistency
+                            saveAppPreferencesToFirestore({ searchTypingDelaySec: opt.val }).catch((err) => {
+                              console.warn('Could not sync preference to Firestore:', err);
+                            });
                           }
                           setShowDelaySettings(false);
                         }}

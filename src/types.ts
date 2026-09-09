@@ -194,3 +194,10 @@ export interface OnlineStoreOrder {
   createdAt: string;
   notes?: string;
 }
+
+export interface AppPreferences {
+  searchTypingDelaySec?: number;
+  theme?: ThemeMode;
+  currency?: string;
+  updatedAt?: string;
+}

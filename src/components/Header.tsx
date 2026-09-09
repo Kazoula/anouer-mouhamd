@@ -26,6 +26,7 @@ interface HeaderProps {
   effectiveTheme: 'dark' | 'light';
   onToggleTheme: () => void;
   cloudSyncStatus?: 'synced' | 'syncing' | 'offline';
+  onOpenCloudSync?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -38,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
   effectiveTheme,
   onToggleTheme,
   cloudSyncStatus = 'synced',
+  onOpenCloudSync,
 }) => {
   const [soundOn, setSoundOn] = React.useState<boolean>(soundEffects.isEnabled());
   // Calculate low stock items count
@@ -62,19 +64,22 @@ export const Header: React.FC<HeaderProps> = ({
               <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate hidden min-[360px]:block max-w-[90px] sm:max-w-none">
                 نظام سحابي
               </p>
-              <div 
-                className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-md border shrink-0 ${
+              <button 
+                id="header-cloud-sync-btn"
+                type="button"
+                onClick={onOpenCloudSync}
+                className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-md border shrink-0 transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                   cloudSyncStatus === 'synced'
-                    ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/50'
+                    ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/50 hover:bg-emerald-900/60'
                     : cloudSyncStatus === 'syncing'
-                    ? 'bg-amber-950/60 text-amber-300 border-amber-800/50 animate-pulse'
-                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                    ? 'bg-amber-950/60 text-amber-300 border-amber-800/50 animate-pulse hover:bg-amber-900/60'
+                    : 'bg-rose-950/60 text-rose-400 border-rose-800/50 hover:bg-rose-900/60'
                 }`}
-                title="حالة المزامنة السحابية مع Firebase Firestore"
+                title="اضغط هنا لإدارة المزامنة السحابية بين الهاتف والكمبيوتر"
               >
                 <Cloud className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                <span>{cloudSyncStatus === 'synced' ? 'متزامن' : cloudSyncStatus === 'syncing' ? 'مزامنة...' : 'محلي'}</span>
-              </div>
+                <span>{cloudSyncStatus === 'synced' ? 'سحابي متزامن' : cloudSyncStatus === 'syncing' ? 'مزامنة...' : 'محلي'}</span>
+              </button>
             </div>
           </div>
         </div>

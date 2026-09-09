@@ -35,6 +35,7 @@ interface SettingsModalProps {
   onOpenStoreTab?: () => void;
   cloudSyncStatus?: 'synced' | 'syncing' | 'offline';
   onForceCloudSync?: () => void;
+  onOpenCloudSync?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -51,6 +52,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenStoreTab,
   cloudSyncStatus = 'synced',
   onForceCloudSync,
+  onOpenCloudSync,
 }) => {
   const [showResetConfirm, setShowResetConfirm] = React.useState(false);
   const [soundOn, setSoundOn] = React.useState<boolean>(soundEffects.isEnabled());
@@ -292,6 +294,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </span>
             </div>
 
+            {/* Open Cloud Sync Hub Button */}
+            {onOpenCloudSync && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenCloudSync();
+                  onClose();
+                }}
+                className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all"
+              >
+                <Cloud className="w-4 h-4" />
+                <span>مركز المزامنة السحابية (الهاتف والكمبيوتر)</span>
+              </button>
+            )}
+
             {onForceCloudSync && (
               <button
                 type="button"
@@ -299,7 +316,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 className="w-full py-1.5 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${cloudSyncStatus === 'syncing' ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
-                <span>مزامنة يدوية وتأكيد السحابة</span>
+                <span>فحص وتأكيد الاتصال بالسحابة</span>
               </button>
             )}
           </div>

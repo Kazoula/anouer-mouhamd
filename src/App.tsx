@@ -67,7 +67,11 @@ import {
   clearAllMovementsFromFirestore,
   saveStoreConfigToFirestore,
   saveOnlineOrderToFirestore,
-  deleteOnlineOrderFromFirestore
+  deleteOnlineOrderFromFirestore,
+  subscribeToAppPreferences,
+  saveAppPreferencesToFirestore,
+  pushAllLocalDataToFirestore,
+  fetchAllCloudData
 } from './services/firestoreService';
 import { initFirebaseAuth } from './lib/firebase';
 import { Header } from './components/Header';
@@ -82,6 +86,7 @@ import { PartnersTab } from './components/PartnersTab';
 import { AlertsModal } from './components/AlertsModal';
 import { InvoiceModal } from './components/InvoiceModal';
 import { SettingsModal } from './components/SettingsModal';
+import { CloudSyncModal } from './components/CloudSyncModal';
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>(() => getStoredProducts());
@@ -95,6 +100,8 @@ export default function App() {
   const [storeConfig, setStoreConfig] = useState<StoreConfig>(() => getStoredStoreConfig());
   const [onlineOrders, setOnlineOrders] = useState<OnlineStoreOrder[]>(() => getStoredOnlineOrders());
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('syncing');
+  const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState<boolean>(false);
+  const [cloudUnsyncedLocalCount, setCloudUnsyncedLocalCount] = useState<number>(0);
 
   // Initialize Firebase Auth & Real-Time Sync Subscriptions
   useEffect(() => {
@@ -106,6 +113,7 @@ export default function App() {
     let unsubMovements: (() => void) | undefined;
     let unsubStoreConfig: (() => void) | undefined;
     let unsubOnlineOrders: (() => void) | undefined;
+    let unsubAppPreferences: (() => void) | undefined;
 
     const setupFirebaseSync = async () => {
       try {
@@ -128,6 +136,18 @@ export default function App() {
         unsubProducts = subscribeToProducts((cloudProds) => {
           if (cloudProds && cloudProds.length > 0) {
             setProducts(cloudProds);
+            saveStoredProducts(cloudProds);
+            const localCount = getStoredProducts().length;
+            if (localCount > cloudProds.length) {
+              setCloudUnsyncedLocalCount(localCount - cloudProds.length);
+            } else {
+              setCloudUnsyncedLocalCount(0);
+            }
+          } else {
+            const localCount = getStoredProducts().length;
+            if (localCount > 0) {
+              setCloudUnsyncedLocalCount(localCount);
+            }
           }
           setCloudSyncStatus('synced');
         });
@@ -135,42 +155,66 @@ export default function App() {
         unsubSuppliers = subscribeToSuppliers((cloudSups) => {
           if (cloudSups && cloudSups.length > 0) {
             setSuppliers(cloudSups);
+            saveStoredSuppliers(cloudSups);
           }
         });
 
         unsubCustomers = subscribeToCustomers((cloudCusts) => {
           if (cloudCusts && cloudCusts.length > 0) {
             setCustomers(cloudCusts);
+            saveStoredCustomers(cloudCusts);
           }
         });
 
         unsubSales = subscribeToSales((cloudSales) => {
           if (cloudSales && cloudSales.length > 0) {
             setSales(cloudSales);
+            saveStoredSales(cloudSales);
           }
         });
 
         unsubPurchases = subscribeToPurchases((cloudPurchases) => {
           if (cloudPurchases && cloudPurchases.length > 0) {
             setPurchases(cloudPurchases);
+            saveStoredPurchases(cloudPurchases);
           }
         });
 
         unsubMovements = subscribeToMovements((cloudMovements) => {
           if (cloudMovements && cloudMovements.length > 0) {
             setMovements(cloudMovements);
+            saveStoredMovements(cloudMovements);
           }
         });
 
         unsubStoreConfig = subscribeToStoreConfig((cloudConfig) => {
           if (cloudConfig) {
             setStoreConfig(cloudConfig);
+            saveStoredStoreConfig(cloudConfig);
           }
         });
 
         unsubOnlineOrders = subscribeToOnlineOrders((cloudOrders) => {
           if (cloudOrders && cloudOrders.length > 0) {
             setOnlineOrders(cloudOrders);
+            saveStoredOnlineOrders(cloudOrders);
+          }
+        });
+
+        unsubAppPreferences = subscribeToAppPreferences((cloudPrefs) => {
+          if (cloudPrefs) {
+            if (cloudPrefs.currency) {
+              setCurrency(cloudPrefs.currency);
+              setStoredCurrency(cloudPrefs.currency);
+            }
+            if (cloudPrefs.theme) {
+              setTheme(cloudPrefs.theme);
+              saveStoredTheme(cloudPrefs.theme);
+            }
+            if (cloudPrefs.searchTypingDelaySec !== undefined) {
+              localStorage.setItem('pos_search_typing_delay_sec', String(cloudPrefs.searchTypingDelaySec));
+              window.dispatchEvent(new CustomEvent('pos_typing_delay_changed', { detail: cloudPrefs.searchTypingDelaySec }));
+            }
           }
         });
 
@@ -192,6 +236,7 @@ export default function App() {
       unsubMovements?.();
       unsubStoreConfig?.();
       unsubOnlineOrders?.();
+      unsubAppPreferences?.();
     };
   }, []);
 
@@ -241,6 +286,7 @@ export default function App() {
   const handleChangeTheme = (newTheme: ThemeMode) => {
     setTheme(newTheme);
     saveStoredTheme(newTheme);
+    saveAppPreferencesToFirestore({ theme: newTheme }).catch(() => {});
   };
 
   const handleToggleTheme = () => {
@@ -861,26 +907,99 @@ export default function App() {
   const handleChangeCurrency = (curr: string) => {
     setCurrency(curr);
     setStoredCurrency(curr);
+    saveAppPreferencesToFirestore({ currency: curr }).catch(() => {});
+  };
+
+  const handleForcePushToCloud = async (onProgress: (step: string, percent: number) => void) => {
+    setCloudSyncStatus('syncing');
+    const delaySaved = typeof window !== 'undefined' ? localStorage.getItem('pos_search_typing_delay_sec') : null;
+    const delayNum = delaySaved !== null ? parseFloat(delaySaved) : 3.5;
+
+    const result = await pushAllLocalDataToFirestore({
+      products,
+      suppliers,
+      customers,
+      sales,
+      purchases,
+      movements,
+      storeConfig,
+      onlineOrders,
+      preferences: {
+        currency,
+        theme,
+        searchTypingDelaySec: !isNaN(delayNum) ? delayNum : 3.5,
+      },
+      onProgress,
+    });
+
+    if (result.success) {
+      setCloudUnsyncedLocalCount(0);
+      setCloudSyncStatus('synced');
+    }
+    return result;
+  };
+
+  const handleForcePullFromCloud = async () => {
+    setCloudSyncStatus('syncing');
+    try {
+      const data = await fetchAllCloudData();
+      if (data.products.length > 0) {
+        setProducts(data.products);
+        saveStoredProducts(data.products);
+      }
+      if (data.suppliers.length > 0) {
+        setSuppliers(data.suppliers);
+        saveStoredSuppliers(data.suppliers);
+      }
+      if (data.customers.length > 0) {
+        setCustomers(data.customers);
+        saveStoredCustomers(data.customers);
+      }
+      if (data.sales.length > 0) {
+        setSales(data.sales);
+        saveStoredSales(data.sales);
+      }
+      if (data.purchases.length > 0) {
+        setPurchases(data.purchases);
+        saveStoredPurchases(data.purchases);
+      }
+      if (data.movements.length > 0) {
+        setMovements(data.movements);
+        saveStoredMovements(data.movements);
+      }
+      if (data.storeConfig) {
+        setStoreConfig(data.storeConfig);
+        saveStoredStoreConfig(data.storeConfig);
+      }
+      if (data.onlineOrders.length > 0) {
+        setOnlineOrders(data.onlineOrders);
+        saveStoredOnlineOrders(data.onlineOrders);
+      }
+      if (data.preferences) {
+        if (data.preferences.currency) {
+          setCurrency(data.preferences.currency);
+          setStoredCurrency(data.preferences.currency);
+        }
+        if (data.preferences.theme) {
+          setTheme(data.preferences.theme);
+          saveStoredTheme(data.preferences.theme);
+        }
+        if (data.preferences.searchTypingDelaySec !== undefined) {
+          localStorage.setItem('pos_search_typing_delay_sec', String(data.preferences.searchTypingDelaySec));
+          window.dispatchEvent(new CustomEvent('pos_typing_delay_changed', { detail: data.preferences.searchTypingDelaySec }));
+        }
+      }
+      setCloudUnsyncedLocalCount(0);
+      setCloudSyncStatus('synced');
+      return { success: true };
+    } catch (err: any) {
+      setCloudSyncStatus('synced');
+      return { success: false, error: err?.message || 'فشل جلب البيانات من السحابة' };
+    }
   };
 
   const handleForceCloudSync = async () => {
-    setCloudSyncStatus('syncing');
-    try {
-      await seedInitialFirestoreData(
-        products,
-        suppliers,
-        customers,
-        sales,
-        purchases,
-        movements,
-        storeConfig,
-        onlineOrders
-      );
-      setCloudSyncStatus('synced');
-    } catch (e) {
-      console.error(e);
-      setCloudSyncStatus('synced');
-    }
+    await handleForcePullFromCloud();
   };
 
   const handleResetData = () => {
@@ -1019,7 +1138,25 @@ export default function App() {
           effectiveTheme={effectiveTheme}
           onToggleTheme={handleToggleTheme}
           cloudSyncStatus={cloudSyncStatus}
+          onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
         />
+
+        {/* Unsynced Alert Banner if local has more items than cloud */}
+        {cloudUnsyncedLocalCount > 0 && (
+          <div className="bg-gradient-to-r from-amber-950/90 to-amber-900/90 border-b border-amber-600/60 px-3 py-2 text-xs flex items-center justify-between gap-2 text-amber-200 animate-in fade-in">
+            <span className="flex items-center gap-1.5 font-bold truncate">
+              <span>⚡</span>
+              <span>يوجد {cloudUnsyncedLocalCount} صنف جديد على هذا الجهاز لم يتم رفعهم للسحابة بعد</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsCloudSyncModalOpen(true)}
+              className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[11px] shrink-0 transition-all shadow-sm active:scale-95"
+            >
+              مزامنة مع هاتفك الآن
+            </button>
+          </div>
+        )}
 
         {/* Tab Views */}
         <main className="flex-1 w-full">
@@ -1174,6 +1311,20 @@ export default function App() {
         onOpenStoreTab={() => setActiveTab('store')}
         cloudSyncStatus={cloudSyncStatus}
         onForceCloudSync={handleForceCloudSync}
+        onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+      />
+
+      {/* Cloud Sync Modal (Phone <-> PC) */}
+      <CloudSyncModal
+        isOpen={isCloudSyncModalOpen}
+        onClose={() => setIsCloudSyncModalOpen(false)}
+        cloudSyncStatus={cloudSyncStatus}
+        localProductsCount={products.length}
+        localSalesCount={sales.length}
+        localSuppliersCount={suppliers.length}
+        localCustomersCount={customers.length}
+        onForcePushToCloud={handleForcePushToCloud}
+        onForcePullFromCloud={handleForcePullFromCloud}
       />
     </div>
   );
