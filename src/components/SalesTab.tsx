@@ -320,13 +320,14 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   };
 
   const handleSwitchToSearch = () => {
+    setSelectedProductToAdd('');
     setOpenAllProductsTrigger(prev => prev + 1);
     setIsBigSearchOpen(true);
     setStep2SubView('search');
     setTimeout(() => {
-      const searchInput = document.querySelector('#sales-product-selector input') as HTMLInputElement | null;
+      const searchInput = (document.querySelector('#sales-product-selector-big-window input') || document.querySelector('#sales-product-selector input')) as HTMLInputElement | null;
       searchInput?.focus();
-    }, 80);
+    }, 100);
   };
 
   const handleCloseBigSearch = () => {
@@ -886,7 +887,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                             currency={currency}
                             mode="sale"
                             accentColor="emerald"
-                            placeholder="ابحث باسم الصنف أو السعر (مثلاً: 25 أو حليب)..."
+                            placeholder="ابحث بأي جزء من الكلمة (مثال: ندوي أو MAX LE) أو السعر أو الباركود..."
                             onSearchBlur={handleSearchBlur}
                             onKeyboardDismiss={handleDismissKeyboardAndShowInvoice}
                             hasCartItems={cartItems.length > 0}

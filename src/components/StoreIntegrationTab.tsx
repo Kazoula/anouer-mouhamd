@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { Product, StoreConfig, OnlineStoreOrder, SaleInvoice } from '../types';
 import { formatCurrency, formatArabicDateTime } from '../utils/calculations';
+import { filterAndRankProducts } from '../utils/searchHelpers';
 
 interface StoreIntegrationTabProps {
   products: Product[];
@@ -162,11 +163,11 @@ export const StoreIntegrationTab: React.FC<StoreIntegrationTabProps> = ({
 
   // Categories for Customer Store Preview
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))];
-  const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.barcode.includes(searchQuery);
-    const matchesCat = selectedCategory === 'all' || p.category === selectedCategory;
-    return matchesSearch && matchesCat;
-  });
+  const filteredProducts = React.useMemo(() => {
+    const list = filterAndRankProducts(products, searchQuery);
+    if (selectedCategory === 'all') return list;
+    return list.filter(p => p.category === selectedCategory);
+  }, [products, searchQuery, selectedCategory]);
 
   const addToCart = (product: Product) => {
     setCart(prev => {

@@ -628,6 +628,28 @@ export async function deleteSupplierFromFirestore(supplierId: string): Promise<v
   await deleteDoc(ref);
 }
 
+export async function clearAllSuppliersFromFirestore(supplierIds?: string[]): Promise<void> {
+  let idsToDelete = supplierIds && supplierIds.length > 0 ? [...supplierIds] : [];
+  try {
+    const snap = await getDocs(collection(db, COLLECTIONS.SUPPLIERS));
+    const dbIds = snap.docs.map(d => d.id);
+    idsToDelete = Array.from(new Set([...idsToDelete, ...dbIds]));
+  } catch (e) {
+    console.error('Error fetching suppliers to clear from Firestore:', e);
+  }
+
+  const chunkSize = 200;
+  for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+    const chunk = idsToDelete.slice(i, i + chunkSize);
+    const batch = writeBatch(db);
+    chunk.forEach((id) => {
+      const ref = doc(db, COLLECTIONS.SUPPLIERS, id);
+      batch.delete(ref);
+    });
+    await batch.commit();
+  }
+}
+
 export async function saveCustomerToFirestore(customer: Customer): Promise<void> {
   const cleaned = cleanForFirestore(customer);
   const ref = doc(db, COLLECTIONS.CUSTOMERS, cleaned.id);
@@ -637,6 +659,28 @@ export async function saveCustomerToFirestore(customer: Customer): Promise<void>
 export async function deleteCustomerFromFirestore(customerId: string): Promise<void> {
   const ref = doc(db, COLLECTIONS.CUSTOMERS, customerId);
   await deleteDoc(ref);
+}
+
+export async function clearAllCustomersFromFirestore(customerIds?: string[]): Promise<void> {
+  let idsToDelete = customerIds && customerIds.length > 0 ? [...customerIds] : [];
+  try {
+    const snap = await getDocs(collection(db, COLLECTIONS.CUSTOMERS));
+    const dbIds = snap.docs.map(d => d.id);
+    idsToDelete = Array.from(new Set([...idsToDelete, ...dbIds]));
+  } catch (e) {
+    console.error('Error fetching customers to clear from Firestore:', e);
+  }
+
+  const chunkSize = 200;
+  for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+    const chunk = idsToDelete.slice(i, i + chunkSize);
+    const batch = writeBatch(db);
+    chunk.forEach((id) => {
+      const ref = doc(db, COLLECTIONS.CUSTOMERS, id);
+      batch.delete(ref);
+    });
+    await batch.commit();
+  }
 }
 
 export async function saveSaleToFirestore(sale: SaleInvoice): Promise<void> {

@@ -16,7 +16,14 @@ import {
   Receipt,
   ShoppingCart,
   Calendar,
-  FileSpreadsheet
+  CreditCard,
+  Activity,
+  Clock,
+  ShieldAlert,
+  FileSpreadsheet,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 import { Supplier, Customer, SaleInvoice, PurchaseInvoice } from '../types';
 import { formatCurrency, formatArabicDateTime } from '../utils/calculations';
@@ -38,6 +45,9 @@ interface PartnersTabProps {
   onStartPurchaseForSupplier: (supplierId: string) => void;
   onOpenSaleInvoice: (invoice: SaleInvoice) => void;
   onOpenPurchaseInvoice: (invoice: PurchaseInvoice) => void;
+  onDeleteAllSuppliers?: () => Promise<void> | void;
+  onDeleteAllCustomers?: () => Promise<void> | void;
+  onDeleteAllPartners?: () => Promise<void> | void;
 }
 
 export const PartnersTab: React.FC<PartnersTabProps> = ({
@@ -56,9 +66,13 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
   onStartPurchaseForSupplier,
   onOpenSaleInvoice,
   onOpenPurchaseInvoice,
+  onDeleteAllSuppliers,
+  onDeleteAllCustomers,
+  onDeleteAllPartners,
 }) => {
   const [partnerType, setPartnerType] = useState<'suppliers' | 'customers'>('suppliers');
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   // Modals
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -70,6 +84,9 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
     company: '',
     address: '',
     balance: 0,
+    creditLimit: undefined,
+    lastTransactionDate: '',
+    isActive: true,
   });
 
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -79,11 +96,66 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
     phone: '',
     address: '',
     balance: 0,
+    creditLimit: undefined,
+    lastTransactionDate: '',
+    isActive: true,
   });
 
   // Deletion Modals
   const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+
+  // Bulk Delete All Modal
+  const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
+  const [deleteAllTarget, setDeleteAllTarget] = useState<'suppliers' | 'customers' | 'both'>('suppliers');
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Balances summary for Delete All Modal
+  const totalSuppliersBalance = suppliers.reduce((sum, s) => sum + (Number(s.balance) || 0), 0);
+  const totalCustomersBalance = customers.reduce((sum, c) => sum + (Number(c.balance) || 0), 0);
+
+  const handleConfirmDeleteAll = async () => {
+    setIsDeletingAll(true);
+    try {
+      if (deleteAllTarget === 'suppliers') {
+        const count = suppliers.length;
+        if (onDeleteAllSuppliers) {
+          await onDeleteAllSuppliers();
+        } else {
+          suppliers.forEach(s => onDeleteSupplier(s.id));
+        }
+        setToastMessage(`تم حذف جميع الموردين (${count} مورد) بنجاح`);
+      } else if (deleteAllTarget === 'customers') {
+        const count = customers.length;
+        if (onDeleteAllCustomers) {
+          await onDeleteAllCustomers();
+        } else {
+          customers.forEach(c => onDeleteCustomer(c.id));
+        }
+        setToastMessage(`تم حذف جميع العملاء (${count} عميل) بنجاح`);
+      } else {
+        const sCount = suppliers.length;
+        const cCount = customers.length;
+        if (onDeleteAllPartners) {
+          await onDeleteAllPartners();
+        } else {
+          if (onDeleteAllSuppliers) await onDeleteAllSuppliers();
+          else suppliers.forEach(s => onDeleteSupplier(s.id));
+
+          if (onDeleteAllCustomers) await onDeleteAllCustomers();
+          else customers.forEach(c => onDeleteCustomer(c.id));
+        }
+        setToastMessage(`تم حذف كافة الموردين (${sCount}) والعملاء (${cCount}) بنجاح`);
+      }
+      setIsDeleteAllModalOpen(false);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err) {
+      console.error('Error deleting all partners:', err);
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
 
   // Statement Drawer Modal
   const [statementPartner, setStatementPartner] = useState<{ type: 'supplier' | 'customer'; data: Supplier | Customer } | null>(null);
@@ -99,9 +171,13 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
   // Filtered Suppliers:
   // 1. If not searching, hide records with 0 balance
   // 2. If searching, show all matching records including 0 balance
-  // 3. Sort from highest balance/price down to lowest
+  // 3. Filter by status (all, active, inactive)
+  // 4. Sort from highest balance/price down to lowest
   const filteredSuppliers = suppliers
     .filter(s => {
+      if (statusFilter === 'active' && s.isActive === false) return false;
+      if (statusFilter === 'inactive' && s.isActive !== false) return false;
+
       const matchesSearch = !isSearching || (
         s.name.toLowerCase().includes(cleanSearch) ||
         (s.phone && s.phone.includes(cleanSearch)) ||
@@ -130,9 +206,13 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
   // Filtered Customers:
   // 1. If not searching, hide records with 0 balance
   // 2. If searching, show all matching records including 0 balance
-  // 3. Sort from highest balance/price down to lowest
+  // 3. Filter by status (all, active, inactive)
+  // 4. Sort from highest balance/price down to lowest
   const filteredCustomers = customers
     .filter(c => {
+      if (statusFilter === 'active' && c.isActive === false) return false;
+      if (statusFilter === 'inactive' && c.isActive !== false) return false;
+
       const matchesSearch = !isSearching || (
         c.name.toLowerCase().includes(cleanSearch) ||
         (c.phone && c.phone.includes(cleanSearch)) ||
@@ -160,13 +240,27 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
   // Supplier Add / Edit
   const openAddSupplier = () => {
     setEditingSupplier(null);
-    setSupplierFormData({ name: '', phone: '', company: '', address: '', balance: 0 });
+    setSupplierFormData({ 
+      name: '', 
+      phone: '', 
+      company: '', 
+      address: '', 
+      balance: 0,
+      creditLimit: undefined,
+      lastTransactionDate: '',
+      isActive: true,
+    });
     setIsSupplierModalOpen(true);
   };
 
   const openEditSupplier = (s: Supplier) => {
     setEditingSupplier(s);
-    setSupplierFormData({ ...s });
+    setSupplierFormData({ 
+      ...s,
+      creditLimit: s.creditLimit,
+      lastTransactionDate: s.lastTransactionDate || '',
+      isActive: s.isActive !== false,
+    });
     setIsSupplierModalOpen(true);
   };
 
@@ -181,6 +275,11 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
       company: supplierFormData.company?.trim() || '',
       address: supplierFormData.address?.trim() || '',
       balance: Number(supplierFormData.balance) || 0,
+      creditLimit: supplierFormData.creditLimit !== undefined && supplierFormData.creditLimit !== null && !isNaN(Number(supplierFormData.creditLimit)) && Number(supplierFormData.creditLimit) > 0 
+        ? Number(supplierFormData.creditLimit) 
+        : undefined,
+      lastTransactionDate: supplierFormData.lastTransactionDate?.trim() || undefined,
+      isActive: supplierFormData.isActive !== false,
       createdAt: editingSupplier ? editingSupplier.createdAt : new Date().toISOString(),
     };
 
@@ -191,13 +290,26 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
   // Customer Add / Edit
   const openAddCustomer = () => {
     setEditingCustomer(null);
-    setCustomerFormData({ name: '', phone: '', address: '', balance: 0 });
+    setCustomerFormData({ 
+      name: '', 
+      phone: '', 
+      address: '', 
+      balance: 0,
+      creditLimit: undefined,
+      lastTransactionDate: '',
+      isActive: true,
+    });
     setIsCustomerModalOpen(true);
   };
 
   const openEditCustomer = (c: Customer) => {
     setEditingCustomer(c);
-    setCustomerFormData({ ...c });
+    setCustomerFormData({ 
+      ...c,
+      creditLimit: c.creditLimit,
+      lastTransactionDate: c.lastTransactionDate || '',
+      isActive: c.isActive !== false,
+    });
     setIsCustomerModalOpen(true);
   };
 
@@ -211,6 +323,11 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
       phone: customerFormData.phone?.trim() || '',
       address: customerFormData.address?.trim() || '',
       balance: Number(customerFormData.balance) || 0,
+      creditLimit: customerFormData.creditLimit !== undefined && customerFormData.creditLimit !== null && !isNaN(Number(customerFormData.creditLimit)) && Number(customerFormData.creditLimit) > 0 
+        ? Number(customerFormData.creditLimit) 
+        : undefined,
+      lastTransactionDate: customerFormData.lastTransactionDate?.trim() || undefined,
+      isActive: customerFormData.isActive !== false,
       createdAt: editingCustomer ? editingCustomer.createdAt : new Date().toISOString(),
     };
 
@@ -273,6 +390,24 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          {((partnerType === 'suppliers' && suppliers.length > 0) || (partnerType === 'customers' && customers.length > 0)) && (
+            <button
+              id="delete-all-partners-btn"
+              onClick={() => {
+                setDeleteAllTarget(partnerType);
+                setIsDeleteAllModalOpen(true);
+              }}
+              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 hover:border-rose-500 font-bold text-xs sm:text-sm px-2.5 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+              title={partnerType === 'suppliers' ? "حذف جميع الموردين بضغطة واحدة" : "حذف جميع العملاء بضغطة واحدة"}
+            >
+              <Trash2 className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+              <span className="hidden sm:inline font-bold">
+                {partnerType === 'suppliers' ? 'حذف كافة الموردين' : 'حذف كافة العملاء'}
+              </span>
+              <span className="sm:hidden font-bold">حذف الكل</span>
+            </button>
+          )}
+
           <button
             id="import-partners-sheet-btn"
             onClick={() => setIsImportModalOpen(true)}
@@ -299,9 +434,48 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
         </div>
       </div>
 
-      {/* Active Sort & Zero-Balance Visibility Indicator */}
+      {/* Active Sort & Zero-Balance Visibility Indicator & Status Filter */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Status Filter Pills */}
+          <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700/80 text-[11px] font-medium">
+            <button
+              type="button"
+              onClick={() => setStatusFilter('all')}
+              className={`px-2.5 py-1 rounded-lg transition-all ${
+                statusFilter === 'all'
+                  ? 'bg-slate-700 text-white font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              الكل ({partnerType === 'suppliers' ? suppliers.length : customers.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('active')}
+              className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                statusFilter === 'active'
+                  ? 'bg-emerald-600/30 text-emerald-300 font-bold border border-emerald-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-emerald-400'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span>النشطين</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('inactive')}
+              className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                statusFilter === 'inactive'
+                  ? 'bg-rose-600/30 text-rose-300 font-bold border border-rose-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-rose-400'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+              <span>غير النشطين</span>
+            </button>
+          </div>
+
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 border border-slate-700/80 font-bold text-[11px] shadow-sm">
             <span className="text-amber-400 font-black">↓</span>
             <span>مرتب تنازلياً من أعلى رصيد للأدنى</span>
@@ -370,14 +544,25 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                           #{idx + 1}
                         </div>
                         <div>
-                          <h3 className="font-bold text-sm text-white">{supplier.name}</h3>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-sm text-white">{supplier.name}</h3>
+                            {supplier.isActive === false ? (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                غير نشط
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                نشط
+                              </span>
+                            )}
+                          </div>
                           {supplier.company && (
                             <span className="text-[11px] text-slate-400">{supplier.company}</span>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs text-slate-400 mt-2">
+                      <div className="flex items-center gap-3 text-xs text-slate-400 mt-2 flex-wrap">
                         {supplier.phone && (
                           <a 
                             href={`tel:${supplier.phone}`}
@@ -391,6 +576,12 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                           <span className="flex items-center gap-1 text-slate-400">
                             <MapPin className="w-3.5 h-3.5 text-slate-500" />
                             <span>{supplier.address}</span>
+                          </span>
+                        )}
+                        {(supplier.lastTransactionDate || (supplierPurchases.length > 0 && supplierPurchases[0]?.date)) && (
+                          <span className="flex items-center gap-1 text-slate-300 text-[11px]" title="تاريخ آخر تعامل">
+                            <Clock className="w-3.5 h-3.5 text-blue-400" />
+                            <span>آخر تعامل: {supplier.lastTransactionDate || formatArabicDateTime(supplierPurchases[0].date)}</span>
                           </span>
                         )}
                       </div>
@@ -415,12 +606,27 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                   </div>
 
                   {/* Financial Stats Bar */}
-                  <div className="bg-slate-900/80 rounded-xl p-2.5 border border-slate-800 flex items-center justify-between text-xs">
+                  <div className="bg-slate-900/80 rounded-xl p-2.5 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div>
                       <span className="text-[11px] text-slate-400 block">إجمالي التعاملات والتوريد:</span>
                       <span className="font-bold text-white">{formatCurrency(totalPurchasedFrom, currency)}</span>
                       <span className="text-[10px] text-slate-500 mr-1">({supplierPurchases.length} فواتير)</span>
                     </div>
+
+                    {supplier.creditLimit !== undefined && supplier.creditLimit > 0 && (
+                      <div className="text-right">
+                        <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                          <CreditCard className="w-3 h-3 text-amber-400" />
+                          <span>حد الإئتمان:</span>
+                        </span>
+                        <span className="font-bold text-amber-400 font-mono">
+                          {formatCurrency(supplier.creditLimit, currency)}
+                        </span>
+                        {supplier.balance > supplier.creditLimit && (
+                          <span className="text-[10px] font-bold text-rose-400 block">تجاوز الحد!</span>
+                        )}
+                      </div>
+                    )}
 
                     <div className="text-left">
                       <span className="text-[11px] text-slate-400 block">رصيد الحساب المالي:</span>
@@ -490,7 +696,18 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                           #{idx + 1}
                         </div>
                         <div>
-                          <h3 className="font-bold text-sm text-white">{customer.name}</h3>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-sm text-white">{customer.name}</h3>
+                            {customer.isActive === false ? (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                غير نشط
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                نشط
+                              </span>
+                            )}
+                          </div>
                           {customer.address && (
                             <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
                               <MapPin className="w-3 h-3 text-slate-500" />
@@ -500,8 +717,8 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                         </div>
                       </div>
 
-                      {customer.phone && (
-                        <div className="mt-2">
+                      <div className="flex items-center gap-3 text-xs text-slate-400 mt-2 flex-wrap">
+                        {customer.phone && (
                           <a 
                             href={`tel:${customer.phone}`}
                             className="inline-flex items-center gap-1 text-emerald-400 hover:underline text-xs font-mono"
@@ -509,8 +726,14 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                             <Phone className="w-3.5 h-3.5" />
                             <span>{customer.phone}</span>
                           </a>
-                        </div>
-                      )}
+                        )}
+                        {(customer.lastTransactionDate || (customerSales.length > 0 && customerSales[0]?.date)) && (
+                          <span className="flex items-center gap-1 text-slate-300 text-[11px]" title="تاريخ آخر تعامل">
+                            <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>آخر تعامل: {customer.lastTransactionDate || formatArabicDateTime(customerSales[0].date)}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-1 shrink-0">
@@ -532,12 +755,27 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                   </div>
 
                   {/* Financial Stats Bar */}
-                  <div className="bg-slate-900/80 rounded-xl p-2.5 border border-slate-800 flex items-center justify-between text-xs">
+                  <div className="bg-slate-900/80 rounded-xl p-2.5 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div>
                       <span className="text-[11px] text-slate-400 block">إجمالي مشتريات العميل:</span>
                       <span className="font-bold text-emerald-400">{formatCurrency(totalPurchasedBy, currency)}</span>
                       <span className="text-[10px] text-slate-500 mr-1">({customerSales.length} فواتير)</span>
                     </div>
+
+                    {customer.creditLimit !== undefined && customer.creditLimit > 0 && (
+                      <div className="text-right">
+                        <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                          <CreditCard className="w-3 h-3 text-amber-400" />
+                          <span>سقف المديونية (حد الإئتمان):</span>
+                        </span>
+                        <span className="font-bold text-amber-400 font-mono">
+                          {formatCurrency(customer.creditLimit, currency)}
+                        </span>
+                        {customer.balance > customer.creditLimit && (
+                          <span className="text-[10px] font-bold text-rose-400 block">تجاوز الحد!</span>
+                        )}
+                      </div>
+                    )}
 
                     <div className="text-left">
                       <span className="text-[11px] text-slate-400 block">الرصيد والذمم:</span>
@@ -643,15 +881,56 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                 />
               </div>
 
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">الرصيد الافتتاحي المستحق له</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={supplierFormData.balance ?? 0}
-                  onChange={(e) => setSupplierFormData({ ...supplierFormData, balance: parseFloat(e.target.value) || 0 })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">الرصيد الافتتاحي المستحق له</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={supplierFormData.balance ?? 0}
+                    onChange={(e) => setSupplierFormData({ ...supplierFormData, balance: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">حد الإئتمان (اختياري)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="مثال: 5000"
+                    value={supplierFormData.creditLimit ?? ''}
+                    onChange={(e) => setSupplierFormData({ ...supplierFormData, creditLimit: e.target.value ? parseFloat(e.target.value) : undefined })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">تاريخ آخر تعامل (اختياري)</label>
+                  <input
+                    type="date"
+                    value={supplierFormData.lastTransactionDate || ''}
+                    onChange={(e) => setSupplierFormData({ ...supplierFormData, lastTransactionDate: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">حالة المورد في النظام</label>
+                  <label className="flex items-center gap-2 cursor-pointer bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-xl px-3 py-2 mt-0.5 select-none">
+                    <input
+                      type="checkbox"
+                      checked={supplierFormData.isActive !== false}
+                      onChange={(e) => setSupplierFormData({ ...supplierFormData, isActive: e.target.checked })}
+                      className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4 bg-slate-850 border-slate-700"
+                    />
+                    <span className={`font-bold text-xs ${supplierFormData.isActive !== false ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {supplierFormData.isActive !== false ? 'مورد نشط' : 'مورد غير نشط (موقوف)'}
+                    </span>
+                  </label>
+                </div>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
@@ -735,15 +1014,56 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                 />
               </div>
 
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">الرصيد والمديونية المسبقة</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={customerFormData.balance ?? 0}
-                  onChange={(e) => setCustomerFormData({ ...customerFormData, balance: parseFloat(e.target.value) || 0 })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">الرصيد والمديونية المسبقة</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={customerFormData.balance ?? 0}
+                    onChange={(e) => setCustomerFormData({ ...customerFormData, balance: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">سقف المديونية (حد الإئتمان)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="مثال: 2000"
+                    value={customerFormData.creditLimit ?? ''}
+                    onChange={(e) => setCustomerFormData({ ...customerFormData, creditLimit: e.target.value ? parseFloat(e.target.value) : undefined })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">تاريخ آخر تعامل (اختياري)</label>
+                  <input
+                    type="date"
+                    value={customerFormData.lastTransactionDate || ''}
+                    onChange={(e) => setCustomerFormData({ ...customerFormData, lastTransactionDate: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">حالة العميل في النظام</label>
+                  <label className="flex items-center gap-2 cursor-pointer bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-xl px-3 py-2 mt-0.5 select-none">
+                    <input
+                      type="checkbox"
+                      checked={customerFormData.isActive !== false}
+                      onChange={(e) => setCustomerFormData({ ...customerFormData, isActive: e.target.checked })}
+                      className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 bg-slate-850 border-slate-700"
+                    />
+                    <span className={`font-bold text-xs ${customerFormData.isActive !== false ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {customerFormData.isActive !== false ? 'عميل نشط' : 'عميل غير نشط (موقوف)'}
+                    </span>
+                  </label>
+                </div>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
@@ -996,6 +1316,153 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
         </div>
       )}
 
+      {/* Delete All Partners Modal */}
+      {isDeleteAllModalOpen && (
+        <div 
+          onClick={() => !isDeletingAll && setIsDeleteAllModalOpen(false)}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-lg p-5 sm:p-6 shadow-2xl text-slate-100 my-auto animate-in zoom-in-95"
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-500 flex items-center justify-center shrink-0 border border-rose-500/30">
+                <Trash2 className="w-6 h-6 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="font-black text-base sm:text-lg text-white">حذف كافة الشركاء والحسابات</h3>
+                <p className="text-xs text-slate-400">إجراء جماعي لإزالة سجلات الموردين و/أو العملاء</p>
+              </div>
+            </div>
+
+            {/* Target Selector Tabs */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-850 rounded-2xl border border-slate-800 mb-4 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setDeleteAllTarget('suppliers')}
+                className={`py-2 px-1.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
+                  deleteAllTarget === 'suppliers'
+                    ? 'bg-blue-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>الموردين فقط</span>
+                <span className="text-[10px] opacity-80 font-mono">({suppliers.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDeleteAllTarget('customers')}
+                className={`py-2 px-1.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
+                  deleteAllTarget === 'customers'
+                    ? 'bg-emerald-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>العملاء فقط</span>
+                <span className="text-[10px] opacity-80 font-mono">({customers.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDeleteAllTarget('both')}
+                className={`py-2 px-1.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
+                  deleteAllTarget === 'both'
+                    ? 'bg-rose-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>الكل معاً</span>
+                <span className="text-[10px] opacity-80 font-mono">({suppliers.length + customers.length})</span>
+              </button>
+            </div>
+
+            {/* Warning Alert Banner */}
+            <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-3.5 mb-4 text-xs space-y-1">
+              <p className="font-extrabold text-rose-300 flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>تنبيه هام لا يمكن التراجع عنه:</span>
+              </p>
+              <p className="text-rose-200/90 leading-relaxed pr-5 font-medium">
+                {deleteAllTarget === 'suppliers' && `سيتم حذف جميع الموردين المسجلين (${suppliers.length} مورد) نهائياً من قاعدة البيانات والتطبيق.`}
+                {deleteAllTarget === 'customers' && `سيتم حذف جميع العملاء المسجلين (${customers.length} عميل) نهائياً من قاعدة البيانات والتطبيق.`}
+                {deleteAllTarget === 'both' && `سيتم حذف جميع الموردين (${suppliers.length}) وجميع العملاء (${customers.length}) نهائياً.`}
+                {' '}تبقى فواتير البيع والشراء السابقة محفوظة كما هي ومسجل عليها أسماء الأطراف للتوثيق المحاسبي.
+              </p>
+            </div>
+
+            {/* Summary Box */}
+            <div className="bg-slate-850 border border-slate-800 rounded-2xl p-4 space-y-2.5 mb-5 text-xs">
+              {(deleteAllTarget === 'suppliers' || deleteAllTarget === 'both') && (
+                <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                  <span className="text-slate-400">إجمالي الموردين المراد حذفهم:</span>
+                  <span className="font-black text-sm text-blue-400">{suppliers.length} مورد</span>
+                </div>
+              )}
+              {(deleteAllTarget === 'suppliers' || deleteAllTarget === 'both') && (
+                <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                  <span className="text-slate-400">إجمالي أرصدة/مستحقات الموردين:</span>
+                  <span className="font-black text-amber-400 font-mono">
+                    {formatCurrency(totalSuppliersBalance, currency)}
+                  </span>
+                </div>
+              )}
+              {(deleteAllTarget === 'customers' || deleteAllTarget === 'both') && (
+                <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                  <span className="text-slate-400">إجمالي العملاء المراد حذفهم:</span>
+                  <span className="font-black text-sm text-emerald-400">{customers.length} عميل</span>
+                </div>
+              )}
+              {(deleteAllTarget === 'customers' || deleteAllTarget === 'both') && (
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">إجمالي ديون/مستحقات العملاء:</span>
+                  <span className="font-black text-amber-400 font-mono">
+                    {formatCurrency(totalCustomersBalance, currency)}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                disabled={isDeletingAll}
+                onClick={() => setIsDeleteAllModalOpen(false)}
+                className="py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold text-xs border border-slate-700 transition-colors disabled:opacity-50"
+              >
+                إلغاء التراجع
+              </button>
+              <button
+                type="button"
+                id="confirm-delete-all-partners-btn"
+                disabled={isDeletingAll || (
+                  (deleteAllTarget === 'suppliers' && suppliers.length === 0) ||
+                  (deleteAllTarget === 'customers' && customers.length === 0) ||
+                  (deleteAllTarget === 'both' && suppliers.length === 0 && customers.length === 0)
+                )}
+                onClick={handleConfirmDeleteAll}
+                className="py-3 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow-xl shadow-rose-950/60 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isDeletingAll ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>جاري الحذف...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>نعم، حذف الكل الآن</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Import Partners Modal */}
       <ImportPartnersModal
         isOpen={isImportModalOpen}
@@ -1007,6 +1474,14 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
         onBulkImportCustomers={onBulkImportCustomers || (() => {})}
         onBulkImportSuppliers={onBulkImportSuppliers || (() => {})}
       />
+
+      {/* Floating Toast Message */}
+      {toastMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white font-bold px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 text-xs sm:text-sm animate-in slide-in-from-bottom-5">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 };

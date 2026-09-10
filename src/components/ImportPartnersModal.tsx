@@ -17,7 +17,10 @@ import {
   Phone,
   Building,
   MapPin,
-  DollarSign
+  DollarSign,
+  CreditCard,
+  Calendar,
+  Activity
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Customer, Supplier } from '../types';
@@ -39,6 +42,9 @@ interface CustomerMapping {
   phone: string;
   address: string;
   balance: string;
+  creditLimit: string;
+  lastTransactionDate: string;
+  isActive: string;
   notes: string;
 }
 
@@ -48,6 +54,9 @@ interface SupplierMapping {
   company: string;
   address: string;
   balance: string;
+  creditLimit: string;
+  lastTransactionDate: string;
+  isActive: string;
   notes: string;
 }
 
@@ -98,6 +107,9 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
     phone: '',
     address: '',
     balance: '',
+    creditLimit: '',
+    lastTransactionDate: '',
+    isActive: '',
     notes: '',
   });
 
@@ -107,6 +119,9 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
     company: '',
     address: '',
     balance: '',
+    creditLimit: '',
+    lastTransactionDate: '',
+    isActive: '',
     notes: '',
   });
 
@@ -136,6 +151,9 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
         phone: findHeader(['رقم الهاتف', 'الهاتف', 'الجوال', 'الموبايل', 'رقم الجوال', 'phone', 'mobile', 'tel', 'telephone']),
         address: findHeader(['العنوان', 'المنطقة', 'المدينة', 'الموقع', 'address', 'city', 'adresse']),
         balance: findHeader(['الرصيد', 'الرصيد الافتتاحي', 'المديونية', 'الحساب', 'المستحق', 'balance', 'solde', 'due']),
+        creditLimit: findHeader(['حد الائتمان', 'حد الإئتمان', 'الائتمان', 'الإئتمان', 'سقف الائتمان', 'حد الدين', 'credit limit', 'credit_limit', 'limit', 'plafond']),
+        lastTransactionDate: findHeader(['آخر تعامل', 'اخر تعامل', 'تاريخ آخر تعامل', 'تاريخ اخر تعامل', 'اخر حركة', 'آخر حركة', 'تاريخ الحركة', 'last transaction', 'last_transaction', 'last deal', 'last_deal', 'date']),
+        isActive: findHeader(['نشط', 'الحالة', 'نشط؟', 'حالة الشريك', 'حالة الحساب', 'حالة العميل', 'active', 'status', 'actif', 'statut']),
         notes: findHeader(['ملاحظات', 'الوصف', 'تفاصيل', 'notes', 'remarques', 'comment']),
       };
     } else {
@@ -145,6 +163,9 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
         company: findHeader(['الشركة', 'المؤسسة', 'اسم الشركة', 'المصنع', 'company', 'societe', 'enterprise']),
         address: findHeader(['العنوان', 'المقر', 'المدينة', 'الموقع', 'address', 'city', 'adresse']),
         balance: findHeader(['الرصيد', 'الرصيد الافتتاحي', 'المستحق للمورد', 'الحساب', 'balance', 'solde']),
+        creditLimit: findHeader(['حد الائتمان', 'حد الإئتمان', 'الائتمان', 'الإئتمان', 'سقف الائتمان', 'حد الدين', 'credit limit', 'credit_limit', 'limit', 'plafond']),
+        lastTransactionDate: findHeader(['آخر تعامل', 'اخر تعامل', 'تاريخ آخر تعامل', 'تاريخ اخر تعامل', 'اخر حركة', 'آخر حركة', 'تاريخ الحركة', 'last transaction', 'last_transaction', 'last deal', 'last_deal', 'date']),
+        isActive: findHeader(['نشط', 'الحالة', 'نشط؟', 'حالة الشريك', 'حالة الحساب', 'حالة المورد', 'active', 'status', 'actif', 'statut']),
         notes: findHeader(['ملاحظات', 'الوصف', 'تفاصيل', 'notes', 'remarques']),
       };
     }
@@ -292,6 +313,17 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
         const balRaw = customerMapping.balance ? parseFloat(String(rawRow[customerMapping.balance]).replace(/[^0-9.-]+/g, '')) : 0;
         const balanceVal = !isNaN(balRaw) ? balRaw : 0;
 
+        const creditLimitRaw = customerMapping.creditLimit ? parseFloat(String(rawRow[customerMapping.creditLimit]).replace(/[^0-9.-]+/g, '')) : undefined;
+        const creditLimitVal = creditLimitRaw !== undefined && !isNaN(creditLimitRaw) ? creditLimitRaw : undefined;
+        const lastTxDateVal = customerMapping.lastTransactionDate ? String(rawRow[customerMapping.lastTransactionDate] || '').trim() : '';
+        let isActiveVal = true;
+        if (customerMapping.isActive) {
+          const actRaw = String(rawRow[customerMapping.isActive] || '').trim().toLowerCase();
+          if (['لا', 'غير نشط', 'معطل', 'موقوف', 'false', '0', 'non', 'inactif', 'inactive', 'no'].includes(actRaw)) {
+            isActiveVal = false;
+          }
+        }
+
         const errorMessages: string[] = [];
         if (!nameVal) {
           errorMessages.push('اسم العميل مفقود');
@@ -307,6 +339,9 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
           phone: phoneVal,
           address: addressVal,
           balance: balanceVal,
+          creditLimit: creditLimitVal,
+          lastTransactionDate: lastTxDateVal || (existingMatch ? existingMatch.lastTransactionDate : undefined),
+          isActive: customerMapping.isActive ? isActiveVal : (existingMatch?.isActive !== undefined ? existingMatch.isActive : true),
           createdAt: existingMatch ? existingMatch.createdAt : new Date().toISOString(),
         };
 
@@ -339,6 +374,17 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
         const balRaw = supplierMapping.balance ? parseFloat(String(rawRow[supplierMapping.balance]).replace(/[^0-9.-]+/g, '')) : 0;
         const balanceVal = !isNaN(balRaw) ? balRaw : 0;
 
+        const creditLimitRaw = supplierMapping.creditLimit ? parseFloat(String(rawRow[supplierMapping.creditLimit]).replace(/[^0-9.-]+/g, '')) : undefined;
+        const creditLimitVal = creditLimitRaw !== undefined && !isNaN(creditLimitRaw) ? creditLimitRaw : undefined;
+        const lastTxDateVal = supplierMapping.lastTransactionDate ? String(rawRow[supplierMapping.lastTransactionDate] || '').trim() : '';
+        let isActiveVal = true;
+        if (supplierMapping.isActive) {
+          const actRaw = String(rawRow[supplierMapping.isActive] || '').trim().toLowerCase();
+          if (['لا', 'غير نشط', 'معطل', 'موقوف', 'false', '0', 'non', 'inactif', 'inactive', 'no'].includes(actRaw)) {
+            isActiveVal = false;
+          }
+        }
+
         const errorMessages: string[] = [];
         if (!nameVal) {
           errorMessages.push('اسم المورد مفقود');
@@ -355,6 +401,9 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
           company: companyVal,
           address: addressVal,
           balance: balanceVal,
+          creditLimit: creditLimitVal,
+          lastTransactionDate: lastTxDateVal || (existingMatch ? existingMatch.lastTransactionDate : undefined),
+          isActive: supplierMapping.isActive ? isActiveVal : (existingMatch?.isActive !== undefined ? existingMatch.isActive : true),
           createdAt: existingMatch ? existingMatch.createdAt : new Date().toISOString(),
         };
 
@@ -778,7 +827,7 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
 
             {partnerType === 'customers' ? (
               /* Customer Mapping Fields */
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
                 {/* Name */}
                 <div className="bg-slate-850 p-3 rounded-2xl border border-emerald-500/50 space-y-1">
                   <label className="text-emerald-400 font-bold block">اسم العميل * (إلزامي)</label>
@@ -833,6 +882,60 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-emerald-500"
                   >
                     <option value="">-- افتراضي (0) --</option>
+                    {rawHeaders.map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Credit Limit */}
+                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                  <label className="text-slate-300 font-bold flex items-center gap-1">
+                    <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+                    <span>حد الإئتمان</span>
+                  </label>
+                  <select
+                    value={customerMapping.creditLimit}
+                    onChange={(e) => setCustomerMapping({ ...customerMapping, creditLimit: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">-- بدون حد ائتماني (اختياري) --</option>
+                    {rawHeaders.map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Last Transaction */}
+                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                  <label className="text-slate-300 font-bold flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                    <span>آخر تعامل</span>
+                  </label>
+                  <select
+                    value={customerMapping.lastTransactionDate}
+                    onChange={(e) => setCustomerMapping({ ...customerMapping, lastTransactionDate: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">-- اختر عمود آخر تعامل (اختياري) --</option>
+                    {rawHeaders.map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Active Status */}
+                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                  <label className="text-slate-300 font-bold flex items-center gap-1">
+                    <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>نشط / حالة العميل</span>
+                  </label>
+                  <select
+                    value={customerMapping.isActive}
+                    onChange={(e) => setCustomerMapping({ ...customerMapping, isActive: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">-- افتراضي (نشط) --</option>
                     {rawHeaders.map(h => (
                       <option key={h} value={h}>{h}</option>
                     ))}
@@ -911,6 +1014,60 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
                   >
                     <option value="">-- افتراضي (0) --</option>
+                    {rawHeaders.map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Credit Limit */}
+                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                  <label className="text-slate-300 font-bold flex items-center gap-1">
+                    <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+                    <span>حد الإئتمان</span>
+                  </label>
+                  <select
+                    value={supplierMapping.creditLimit}
+                    onChange={(e) => setSupplierMapping({ ...supplierMapping, creditLimit: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">-- بدون حد ائتماني (اختياري) --</option>
+                    {rawHeaders.map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Last Transaction */}
+                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                  <label className="text-slate-300 font-bold flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                    <span>آخر تعامل</span>
+                  </label>
+                  <select
+                    value={supplierMapping.lastTransactionDate}
+                    onChange={(e) => setSupplierMapping({ ...supplierMapping, lastTransactionDate: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">-- اختر عمود آخر تعامل (اختياري) --</option>
+                    {rawHeaders.map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Active Status */}
+                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                  <label className="text-slate-300 font-bold flex items-center gap-1">
+                    <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>نشط / حالة المورد</span>
+                  </label>
+                  <select
+                    value={supplierMapping.isActive}
+                    onChange={(e) => setSupplierMapping({ ...supplierMapping, isActive: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">-- افتراضي (نشط) --</option>
                     {rawHeaders.map(h => (
                       <option key={h} value={h}>{h}</option>
                     ))}

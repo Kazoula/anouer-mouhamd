@@ -56,8 +56,10 @@ import {
   clearAllProductsFromFirestore,
   saveSupplierToFirestore,
   deleteSupplierFromFirestore,
+  clearAllSuppliersFromFirestore,
   saveCustomerToFirestore,
   deleteCustomerFromFirestore,
+  clearAllCustomersFromFirestore,
   saveSaleToFirestore,
   deleteSaleFromFirestore,
   savePurchaseToFirestore,
@@ -553,11 +555,17 @@ export default function App() {
       return prod;
     }));
 
-    // If customer bought on credit/partial, update customer balance
-    if (newSale.customerId && newSale.remainingAmount > 0) {
+    // Update customer lastTransactionDate and balance (if credit/partial)
+    if (newSale.customerId) {
       setCustomers(prev => prev.map(c => {
         if (c.id === newSale.customerId) {
-          const updatedCust = { ...c, balance: +(c.balance + newSale.remainingAmount).toFixed(2) };
+          const newBal = newSale.remainingAmount > 0 ? +(c.balance + newSale.remainingAmount).toFixed(2) : c.balance;
+          const txDate = newSale.date ? (newSale.date.includes('T') ? newSale.date.split('T')[0] : newSale.date) : new Date().toISOString().split('T')[0];
+          const updatedCust = { 
+            ...c, 
+            balance: newBal,
+            lastTransactionDate: txDate
+          };
           saveCustomerToFirestore(updatedCust).catch(console.error);
           return updatedCust;
         }
@@ -639,11 +647,17 @@ export default function App() {
       return prod;
     }));
 
-    // If purchase was on credit/partial, update supplier balance
-    if (newPurchase.supplierId && newPurchase.remainingAmount > 0) {
+    // Update supplier lastTransactionDate and balance (if credit/partial)
+    if (newPurchase.supplierId) {
       setSuppliers(prev => prev.map(s => {
         if (s.id === newPurchase.supplierId) {
-          const updatedSup = { ...s, balance: +(s.balance + newPurchase.remainingAmount).toFixed(2) };
+          const newBal = newPurchase.remainingAmount > 0 ? +(s.balance + newPurchase.remainingAmount).toFixed(2) : s.balance;
+          const txDate = newPurchase.date ? (newPurchase.date.includes('T') ? newPurchase.date.split('T')[0] : newPurchase.date) : new Date().toISOString().split('T')[0];
+          const updatedSup = { 
+            ...s, 
+            balance: newBal,
+            lastTransactionDate: txDate
+          };
           saveSupplierToFirestore(updatedSup).catch(console.error);
           return updatedSup;
         }
@@ -902,6 +916,33 @@ export default function App() {
   const handleDeleteCustomer = (id: string) => {
     setCustomers(prev => prev.filter(c => c.id !== id));
     deleteCustomerFromFirestore(id).catch(console.error);
+  };
+
+  const handleDeleteAllSuppliers = async () => {
+    const ids = suppliers.map(s => s.id);
+    setSuppliers([]);
+    saveStoredSuppliers([]);
+    await clearAllSuppliersFromFirestore(ids).catch(console.error);
+  };
+
+  const handleDeleteAllCustomers = async () => {
+    const ids = customers.map(c => c.id);
+    setCustomers([]);
+    saveStoredCustomers([]);
+    await clearAllCustomersFromFirestore(ids).catch(console.error);
+  };
+
+  const handleDeleteAllPartners = async () => {
+    const supIds = suppliers.map(s => s.id);
+    const custIds = customers.map(c => c.id);
+    setSuppliers([]);
+    setCustomers([]);
+    saveStoredSuppliers([]);
+    saveStoredCustomers([]);
+    await Promise.all([
+      clearAllSuppliersFromFirestore(supIds).catch(console.error),
+      clearAllCustomersFromFirestore(custIds).catch(console.error),
+    ]);
   };
 
   const handleChangeCurrency = (curr: string) => {
@@ -1260,6 +1301,9 @@ export default function App() {
               }}
               onOpenSaleInvoice={(inv) => setSelectedSaleForModal(inv)}
               onOpenPurchaseInvoice={(inv) => setSelectedPurchaseForModal(inv)}
+              onDeleteAllSuppliers={handleDeleteAllSuppliers}
+              onDeleteAllCustomers={handleDeleteAllCustomers}
+              onDeleteAllPartners={handleDeleteAllPartners}
             />
           )}
         </main>

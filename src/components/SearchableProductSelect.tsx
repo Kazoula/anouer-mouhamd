@@ -4,6 +4,7 @@ import { Product } from '../types';
 import { formatCurrency } from '../utils/calculations';
 import { isDualUnitProduct, getPrimaryUnit, hasThreeUnits, getProductUnitsList } from '../utils/unitHelpers';
 import { saveAppPreferencesToFirestore } from '../services/firestoreService';
+import { filterAndRankProducts, extractSearchTokens, buildHighlightRegex } from '../utils/searchHelpers';
 
 export interface CartItemSummary {
   productId: string;
@@ -12,6 +13,48 @@ export interface CartItemSummary {
   unitName?: string;
   unitType?: string;
 }
+
+/**
+ * Visual highlight for matched tokens in product name.
+ * Highlighting tokens like MAX, LE, etc.
+ */
+export const HighlightedProductName: React.FC<{ name: string; query: string; className?: string }> = ({
+  name,
+  query,
+  className = '',
+}) => {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return <span className={className}>{name}</span>;
+  }
+
+  const highlightRegex = buildHighlightRegex(trimmed);
+  if (!highlightRegex) {
+    return <span className={className}>{name}</span>;
+  }
+
+  const parts = name.split(highlightRegex);
+  return (
+    <span className={className}>
+      {parts.map((part, idx) => {
+        if (!part) return null;
+        highlightRegex.lastIndex = 0;
+        const isMatched = highlightRegex.test(part);
+        if (isMatched) {
+          return (
+            <mark
+              key={idx}
+              className="bg-amber-400/35 text-amber-300 dark:text-amber-200 font-black rounded px-1 mx-0.5 not-italic border border-amber-400/30"
+            >
+              {part}
+            </mark>
+          );
+        }
+        return <span key={idx}>{part}</span>;
+      })}
+    </span>
+  );
+};
 
 interface SearchableProductSelectProps {
   products: Product[];
@@ -53,7 +96,7 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
   onDirectAddProduct,
   currency,
   mode = 'sale',
-  placeholder = 'ابحث بالاسم أو السعر أو الباركود...',
+  placeholder = 'ابحث بأي جزء من الكلمة (مثال: ندوي أو MAX LE) أو السعر أو الباركود...',
   accentColor = 'emerald',
   id = 'searchable-product-select',
   onSearchFocus,
@@ -162,8 +205,12 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
       setIsOpen(true);
       setIsFullScreenResults(true);
       setTimeout(() => {
-        inputRef.current?.focus();
-      }, 60);
+        if (bigInputRef.current) {
+          bigInputRef.current.focus();
+        } else if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 80);
     }
   }, [openAllProductsTrigger]);
 
@@ -172,6 +219,7 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
     if (isOpenBigWindow) {
       setIsOpen(true);
       setIsFullScreenResults(true);
+      setStockFilter('all');
     }
   }, [isOpenBigWindow]);
 
@@ -182,9 +230,7 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
     if (trimmed.length === 0) {
       setIsTyping(false);
       setRemainingSeconds(typingDelaySec);
-      if (!isOpenBigWindow) {
-        setIsFullScreenResults(false);
-      }
+      // Keep isFullScreenResults and isOpen intact so user can browse all products with empty query
       return;
     }
 
@@ -247,57 +293,13 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
   const activeBgClass = isEmerald ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300' : 'bg-blue-500/15 border-blue-500/50 text-blue-300';
   const priceColorClass = isEmerald ? 'text-emerald-400' : 'text-blue-400';
 
-  // Filter products by Name OR Price OR Barcode OR Category
+  // Current parsed search tokens for visual indicators and token matching
+  const searchTokens = useMemo(() => extractSearchTokens(query), [query]);
+
+  // Filter products by Name, Barcode, Category, Price using intelligent multi-token search
+  // e.g. "MAX LE" matches "MAXON LE CARRE 6X24pies سندويتش"
   const filteredProducts = useMemo(() => {
-    const rawQ = query.trim();
-    if (!rawQ) {
-      return products;
-    }
-
-    const normQ = normalizeArabic(rawQ);
-    const numQ = parseFloat(rawQ);
-    const isNum = !isNaN(numQ) && rawQ.length > 0;
-
-    return products.filter(p => {
-      // 1. Search by Name (Arabic normalized)
-      const normName = normalizeArabic(p.name);
-      if (normName.includes(normQ)) return true;
-
-      // 2. Search by Barcode
-      if (p.barcode && p.barcode.includes(rawQ)) return true;
-
-      // 3. Search by Category
-      if (p.category && normalizeArabic(p.category).includes(normQ)) return true;
-
-      // 4. Search by Price (Minor or Major, Sale or Purchase)
-      const minorSaleStr = p.salePriceMinor.toString();
-      const majorSaleStr = p.salePriceMajor.toString();
-      const minorPurchStr = p.purchasePriceMinor.toString();
-      const majorPurchStr = p.purchasePriceMajor.toString();
-
-      if (
-        minorSaleStr.includes(rawQ) ||
-        majorSaleStr.includes(rawQ) ||
-        minorPurchStr.includes(rawQ) ||
-        majorPurchStr.includes(rawQ)
-      ) {
-        return true;
-      }
-
-      // Exact numerical match (e.g. user typed 15.0 or 15)
-      if (isNum) {
-        if (
-          Math.abs(p.salePriceMinor - numQ) < 0.01 ||
-          Math.abs(p.salePriceMajor - numQ) < 0.01 ||
-          Math.abs(p.purchasePriceMinor - numQ) < 0.01 ||
-          Math.abs(p.purchasePriceMajor - numQ) < 0.01
-        ) {
-          return true;
-        }
-      }
-
-      return false;
-    });
+    return filterAndRankProducts(products, query);
   }, [products, query]);
 
   // Pre-calculate stock and cart counts
@@ -445,6 +447,15 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
         </span>
       );
     }
+
+    if (searchTokens.length > 1) {
+      return (
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 border border-amber-400/30">
+          مطابقة بالمقاطع ({searchTokens.length})
+        </span>
+      );
+    }
+
     return null;
   };
 
@@ -517,7 +528,7 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="ابحث باسم الصنف أو السعر أو الباركود..."
+              placeholder="ابحث بأي جزء من الكلمة (مثال: ندوي أو MAX LE) أو السعر أو الباركود..."
               className="w-full bg-slate-950 border border-slate-750 rounded-xl pr-9 pl-9 py-2 text-white placeholder-slate-500 text-xs sm:text-sm font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
             />
             {query && (
@@ -531,6 +542,21 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
               </button>
             )}
           </div>
+
+          {/* Multi-Token Search Indicator Chips */}
+          {searchTokens.length > 1 && (
+            <div className="flex items-center gap-1.5 flex-wrap pt-0.5 animate-in fade-in duration-150">
+              <span className="text-[11px] font-bold text-amber-400/90">بحث بالمقاطع المفصولة:</span>
+              {searchTokens.map((tok, i) => (
+                <span key={i} className="inline-flex items-center gap-1 bg-amber-400/20 text-amber-300 border border-amber-500/40 text-[11px] font-mono font-black px-2 py-0.5 rounded-lg shadow-2xs">
+                  {tok}
+                </span>
+              ))}
+              <span className="text-[10px] text-slate-400 mr-auto">
+                (مطابقة كل مقطع على حدة)
+              </span>
+            </div>
+          )}
 
           {/* Quick Return to Previous Searched Items (e.g. mamia and its varieties) */}
           {lastSearchedQuery && query !== lastSearchedQuery && (
@@ -678,7 +704,7 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-snug break-words">
-                            {prod.name}
+                            <HighlightedProductName name={prod.name} query={query} />
                           </h4>
                           {cartInfo && (
                             <span className="inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-2xs">
@@ -965,11 +991,14 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                 onChange={(e) => {
                   const val = e.target.value;
                   setQuery(val);
-                  setIsOpen(val.trim().length > 0);
+                  setIsOpen(true);
+                }}
+                onClick={() => {
+                  setIsOpen(true);
                 }}
                 onFocus={() => {
                   setIsInputFocused(true);
-                  if (query.trim().length > 0) setIsOpen(true);
+                  setIsOpen(true);
                   onSearchFocus?.();
                 }}
                 onBlur={() => {
@@ -1090,11 +1119,26 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
             </div>
           )}
 
+          {/* Multi-Token Search Indicator Chips */}
+          {searchTokens.length > 1 && (
+            <div className="flex items-center gap-1.5 flex-wrap pt-1.5 px-2 animate-in fade-in duration-150">
+              <span className="text-[11px] font-bold text-amber-400">بحث بالمقاطع المفصولة:</span>
+              {searchTokens.map((tok, i) => (
+                <span key={i} className="inline-flex items-center gap-1 bg-amber-400/20 text-amber-300 border border-amber-500/40 text-[11px] font-mono font-black px-2 py-0.5 rounded-lg shadow-2xs">
+                  {tok}
+                </span>
+              ))}
+              <span className="text-[10px] text-slate-400">
+                (مطابقة كل مقطع)
+              </span>
+            </div>
+          )}
+
           {/* Quick Helper Subtitle */}
           <div className="flex items-center justify-between px-2 pt-2 text-[11px] text-slate-400">
             <span className="flex items-center gap-1.5 font-medium text-slate-300">
               <span className={`inline-block w-1.5 h-1.5 rounded-full ${isEmerald ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-blue-400 shadow-[0_0_6px_rgba(96,165,250,0.8)]'}`}></span>
-              ابحث بالاسم أو السعر أو الباركود
+              ابحث بأي جزء من الكلمة (عربي ولاتيني) أو السعر أو الباركود
             </span>
             {filteredProducts.length > 0 && (
               <span className={`font-mono font-bold text-[10.5px] px-2 py-0.5 rounded-lg border ${
@@ -1259,7 +1303,9 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <h4 className="font-bold text-slate-900 dark:text-white text-xs leading-snug">{prod.name}</h4>
+                        <h4 className="font-bold text-slate-900 dark:text-white text-xs leading-snug">
+                          <HighlightedProductName name={prod.name} query={query} />
+                        </h4>
                         {cartInfo && (
                           <span className="text-[10px] font-black text-emerald-300 bg-emerald-500/25 px-1.5 py-0.2 rounded border border-emerald-500/40">
                             ✓ بالفاتورة ({cartInfo.totalQty})

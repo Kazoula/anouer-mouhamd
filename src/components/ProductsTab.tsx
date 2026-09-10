@@ -34,6 +34,8 @@ import { soundEffects } from '../utils/soundEffects';
 import { ImportProductsModal } from './ImportProductsModal';
 import { classifyProductCategory, STORE_CATEGORY_NAMES } from '../utils/categoryClassifier';
 import { repairAndClassifyProduct } from '../utils/storage';
+import { filterAndRankProducts, extractSearchTokens } from '../utils/searchHelpers';
+import { HighlightedProductName } from './SearchableProductSelect';
 
 interface ProductsTabProps {
   products: Product[];
@@ -171,29 +173,25 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
     setTimeout(() => setSuccessToast(null), 3000);
   };
 
-  // Filtered Products (Memoized)
-  const filteredProducts = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const numQ = parseFloat(q);
-    const isNum = !isNaN(numQ) && q.length > 0;
+  // Search tokens for visual chips
+  const searchTokens = useMemo(() => extractSearchTokens(searchQuery), [searchQuery]);
 
-    return products.filter(p => {
-      const matchesSearch = !q || 
-        p.name.toLowerCase().includes(q) ||
-        p.barcode.includes(q) ||
-        p.category.toLowerCase().includes(q) ||
-        p.salePriceMinor.toString().includes(q) ||
-        p.salePriceMajor.toString().includes(q) ||
-        p.purchasePriceMinor.toString().includes(q) ||
-        p.purchasePriceMajor.toString().includes(q) ||
-        (isNum && (
-          Math.abs(p.salePriceMinor - numQ) < 0.01 ||
-          Math.abs(p.salePriceMajor - numQ) < 0.01
-        ));
-      const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
-      const matchesLowStock = !filterLowStockOnly || p.stockPieces <= p.minStockAlert;
-      return matchesSearch && matchesCategory && matchesLowStock;
-    });
+  // Filtered Products (Memoized with tokenized multi-keyword search e.g. "MAX LE")
+  const filteredProducts = useMemo(() => {
+    // 1. Search and relevance rank
+    let list = filterAndRankProducts(products, searchQuery);
+
+    // 2. Filter by selected category
+    if (selectedCategory !== 'all') {
+      list = list.filter(p => p.category === selectedCategory);
+    }
+
+    // 3. Filter by low stock
+    if (filterLowStockOnly) {
+      list = list.filter(p => p.stockPieces <= p.minStockAlert);
+    }
+
+    return list;
   }, [products, searchQuery, selectedCategory, filterLowStockOnly]);
 
   // Total pages
@@ -374,27 +372,28 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
   return (
     <div className="space-y-4 pb-20 pt-2 px-3 sm:px-4">
       {/* Top Header with Search, Import Sheet, and New Product Buttons */}
-      <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
-          <input
-            type="text"
-            placeholder="بحث بالاسم أو السعر أو الباركود أو التصنيف..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute left-2.5 top-2.5 text-slate-400 hover:text-white"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+      <div>
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
+            <input
+              type="text"
+              placeholder="بحث بأي جزء من الكلمة (مثال: ندوي أو MAX LE) أو السعر أو الباركود أو التصنيف..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute left-2.5 top-2.5 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
           {products.length > 0 && onDeleteAllProducts && (
             <button
               id="delete-all-products-btn"
@@ -429,6 +428,22 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
             <span>صنف جديد</span>
           </button>
         </div>
+      </div>
+
+        {/* Multi-Token Search Indicator Chips */}
+        {searchTokens.length > 1 && (
+          <div className="flex items-center gap-1.5 flex-wrap pt-2 px-1 animate-in fade-in duration-150">
+            <span className="text-xs font-bold text-amber-400">بحث بالمقاطع المفصولة:</span>
+            {searchTokens.map((tok, i) => (
+              <span key={i} className="inline-flex items-center bg-amber-400/20 text-amber-300 border border-amber-500/40 font-mono font-bold px-2 py-0.5 rounded-lg text-xs shadow-2xs">
+                {tok}
+              </span>
+            ))}
+            <span className="text-[11px] text-slate-400">
+              (مطابقة المقاطع في الاسم والباركود والسعر)
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Toast Notification */}
@@ -615,7 +630,9 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                 <div className="flex items-start justify-between gap-2 mb-2.5">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-sm sm:text-base text-white">{product.name}</h3>
+                      <h3 className="font-bold text-sm sm:text-base text-white">
+                        <HighlightedProductName name={product.name} query={searchQuery} />
+                      </h3>
                       {isLowStock && (
                         <span className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
                           <AlertTriangle className="w-3 h-3" />

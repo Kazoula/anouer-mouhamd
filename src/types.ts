@@ -30,6 +30,9 @@ export interface Supplier {
   company?: string;
   address?: string;
   balance: number; // positive = we owe them (creditor), negative = they owe us
+  creditLimit?: number; // حد الإئتمان
+  lastTransactionDate?: string; // آخر تعامل
+  isActive?: boolean; // نشط (افتراضياً true)
   createdAt: string;
 }
 
@@ -37,8 +40,12 @@ export interface Customer {
   id: string;
   name: string;
   phone: string;
+  company?: string;
   address?: string;
   balance: number; // positive = they owe us (debtor), negative = paid in advance
+  creditLimit?: number; // حد الإئتمان
+  lastTransactionDate?: string; // آخر تعامل
+  isActive?: boolean; // نشط (افتراضياً true)
   createdAt: string;
 }
 

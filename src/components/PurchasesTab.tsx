@@ -549,7 +549,7 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
                     currency={currency}
                     mode="purchase"
                     accentColor="blue"
-                    placeholder="ابحث باسم الصنف أو السعر (مثلاً: 20 أو زيت)..."
+                    placeholder="ابحث بأي جزء من الكلمة (مثال: ندوي أو MAX LE) أو السعر أو الباركود..."
                   />
                 </div>
 

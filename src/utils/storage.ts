@@ -160,10 +160,10 @@ export const saveStoredProducts = (products: Product[]) => {
 export const getStoredSuppliers = (): Supplier[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.SUPPLIERS);
-    return raw ? JSON.parse(raw) : initialSuppliers;
+    return raw !== null ? JSON.parse(raw) : initialSuppliers;
   } catch (e) {
     console.error('Error loading suppliers from storage', e);
-    return initialSuppliers;
+    return [];
   }
 };
 
@@ -174,10 +174,10 @@ export const saveStoredSuppliers = (suppliers: Supplier[]) => {
 export const getStoredCustomers = (): Customer[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
-    return raw ? JSON.parse(raw) : initialCustomers;
+    return raw !== null ? JSON.parse(raw) : initialCustomers;
   } catch (e) {
     console.error('Error loading customers from storage', e);
-    return initialCustomers;
+    return [];
   }
 };
 
