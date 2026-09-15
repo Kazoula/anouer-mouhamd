@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Truck, 
@@ -23,11 +23,15 @@ import {
   FileSpreadsheet,
   AlertTriangle,
   CheckCircle2,
-  Loader2
+  Loader2,
+  Wallet,
+  ArrowDownLeft,
+  ArrowUpRight
 } from 'lucide-react';
-import { Supplier, Customer, SaleInvoice, PurchaseInvoice } from '../types';
+import { Supplier, Customer, SaleInvoice, PurchaseInvoice, PartnerPayment } from '../types';
 import { formatCurrency, formatArabicDateTime } from '../utils/calculations';
 import { ImportPartnersModal } from './ImportPartnersModal';
+import { PaymentModal } from './PaymentModal';
 
 interface PartnersTabProps {
   suppliers: Supplier[];
@@ -48,6 +52,10 @@ interface PartnersTabProps {
   onDeleteAllSuppliers?: () => Promise<void> | void;
   onDeleteAllCustomers?: () => Promise<void> | void;
   onDeleteAllPartners?: () => Promise<void> | void;
+  initialPartnerType?: 'suppliers' | 'customers';
+  payments?: PartnerPayment[];
+  onRecordPayment?: (payment: PartnerPayment) => void;
+  onDeletePayment?: (paymentId: string) => void;
 }
 
 export const PartnersTab: React.FC<PartnersTabProps> = ({
@@ -69,8 +77,24 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
   onDeleteAllSuppliers,
   onDeleteAllCustomers,
   onDeleteAllPartners,
+  initialPartnerType = 'customers',
+  payments = [],
+  onRecordPayment,
+  onDeletePayment,
 }) => {
-  const [partnerType, setPartnerType] = useState<'suppliers' | 'customers'>('suppliers');
+  const [partnerType, setPartnerType] = useState<'suppliers' | 'customers'>(initialPartnerType);
+
+  useEffect(() => {
+    if (initialPartnerType) {
+      setPartnerType(initialPartnerType);
+    }
+  }, [initialPartnerType]);
+
+  const [paymentTarget, setPaymentTarget] = useState<{
+    type: 'customer' | 'supplier';
+    data: Customer | Supplier;
+  } | null>(null);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
@@ -637,7 +661,15 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                   </div>
 
                   {/* Quick Action Buttons */}
-                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800/80">
+                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800/80 flex-wrap">
+                    <button
+                      onClick={() => setPaymentTarget({ type: 'supplier', data: supplier })}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-xs"
+                      title="تسجيل دفعة مسددة للمورد"
+                    >
+                      <Wallet className="w-3.5 h-3.5 text-amber-400" />
+                      <span>عملية الدفع (سند صرف)</span>
+                    </button>
                     <button
                       onClick={() => setStatementPartner({ type: 'supplier', data: supplier })}
                       className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 border border-slate-700"
@@ -786,7 +818,15 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                   </div>
 
                   {/* Quick Action Buttons */}
-                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800/80">
+                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800/80 flex-wrap">
+                    <button
+                      onClick={() => setPaymentTarget({ type: 'customer', data: customer })}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-xs"
+                      title="تسجيل دفعة نقدية / تسديد من رصيد العميل"
+                    >
+                      <Wallet className="w-3.5 h-3.5 text-amber-400" />
+                      <span>عملية الدفع (تسديد)</span>
+                    </button>
                     <button
                       onClick={() => setStatementPartner({ type: 'customer', data: customer })}
                       className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 border border-slate-700"
@@ -1127,30 +1167,83 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
               </div>
             </div>
 
-            {/* Invoices List */}
+            {/* Invoices and Payments List */}
             <div className="overflow-y-auto space-y-2 py-2 flex-1">
               {statementPartner.type === 'supplier' ? (
                 (() => {
                   const supPurchases = purchases.filter(p => p.supplierId === statementPartner.data.id || p.supplierName === statementPartner.data.name);
-                  if (supPurchases.length === 0) {
-                    return <div className="text-center py-6 text-slate-500 text-xs">لا توجد فواتير توريد مسجلة لهذا المورد</div>;
+                  const supPayments = payments.filter(p => p.partnerId === statementPartner.data.id || p.partnerName === statementPartner.data.name);
+
+                  // Combine into single ledger timeline
+                  const timeline: Array<{
+                    type: 'invoice' | 'payment';
+                    id: string;
+                    date: string;
+                    ref: string;
+                    amount: number;
+                    subtitle: string;
+                    rawItem: any;
+                  }> = [
+                    ...supPurchases.map(p => ({
+                      type: 'invoice' as const,
+                      id: p.id,
+                      date: p.date,
+                      ref: p.invoiceNumber,
+                      amount: p.netAmount,
+                      subtitle: `${p.items.length} أصناف توريد`,
+                      rawItem: p,
+                    })),
+                    ...supPayments.map(pay => ({
+                      type: 'payment' as const,
+                      id: pay.id,
+                      date: pay.date,
+                      ref: pay.receiptNumber,
+                      amount: pay.amount,
+                      subtitle: `سند صرف مسدد (${pay.paymentMethod === 'cash' ? 'نقداً' : pay.paymentMethod === 'card' ? 'بطاقة' : pay.paymentMethod === 'transfer' ? 'تحويل' : 'شيك'})`,
+                      rawItem: pay,
+                    }))
+                  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                  if (timeline.length === 0) {
+                    return <div className="text-center py-6 text-slate-500 text-xs">لا توجد حركات أو فواتير مسجلة لهذا المورد</div>;
                   }
-                  return supPurchases.map(p => (
+
+                  return timeline.map(item => (
                     <div 
-                      key={p.id} 
+                      key={item.id} 
                       onClick={() => {
-                        onOpenPurchaseInvoice(p);
-                        setStatementPartner(null);
+                        if (item.type === 'invoice') {
+                          onOpenPurchaseInvoice(item.rawItem);
+                          setStatementPartner(null);
+                        }
                       }}
-                      className="bg-slate-800/80 hover:bg-slate-800 p-2.5 rounded-xl border border-slate-750 flex items-center justify-between text-xs cursor-pointer"
+                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                        item.type === 'payment'
+                          ? 'bg-amber-950/20 border-amber-800/40 text-amber-200'
+                          : 'bg-slate-800/80 hover:bg-slate-800 border-slate-750 cursor-pointer'
+                      }`}
                     >
                       <div>
-                        <div className="font-bold text-white font-mono">{p.invoiceNumber}</div>
-                        <div className="text-[10.5px] text-slate-400 mt-0.5">{formatArabicDateTime(p.date)}</div>
+                        <div className="flex items-center gap-1.5 font-bold font-mono">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                            item.type === 'payment' ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300'
+                          }`}>
+                            {item.type === 'payment' ? 'سند صرف' : 'فاتورة توريد'}
+                          </span>
+                          <span className="text-white">{item.ref}</span>
+                        </div>
+                        <div className="text-[10.5px] text-slate-400 mt-0.5">{formatArabicDateTime(item.date)}</div>
+                        <div className="text-[10px] text-slate-400">{item.subtitle}</div>
                       </div>
                       <div className="text-left">
-                        <div className="font-black text-blue-400">{formatCurrency(p.netAmount, currency)}</div>
-                        <span className="text-[10px] text-slate-400">{p.items.length} أصناف</span>
+                        <div className={`font-black font-mono ${
+                          item.type === 'payment' ? 'text-amber-400' : 'text-blue-400'
+                        }`}>
+                          {item.type === 'payment' ? '-' : '+'}{formatCurrency(item.amount, currency)}
+                        </div>
+                        {item.type === 'payment' && (
+                          <span className="text-[10px] text-emerald-400 font-bold block">تم السداد</span>
+                        )}
                       </div>
                     </div>
                   ));
@@ -1158,25 +1251,78 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
               ) : (
                 (() => {
                   const custSales = sales.filter(s => s.customerId === statementPartner.data.id || s.customerName === statementPartner.data.name);
-                  if (custSales.length === 0) {
-                    return <div className="text-center py-6 text-slate-500 text-xs">لا توجد فواتير بيع مسجلة لهذا العميل</div>;
+                  const custPayments = payments.filter(p => p.partnerId === statementPartner.data.id || p.partnerName === statementPartner.data.name);
+
+                  // Combine into single ledger timeline
+                  const timeline: Array<{
+                    type: 'invoice' | 'payment';
+                    id: string;
+                    date: string;
+                    ref: string;
+                    amount: number;
+                    subtitle: string;
+                    rawItem: any;
+                  }> = [
+                    ...custSales.map(s => ({
+                      type: 'invoice' as const,
+                      id: s.id,
+                      date: s.date,
+                      ref: s.invoiceNumber,
+                      amount: s.netAmount,
+                      subtitle: `${s.items.length} أصناف مباعة`,
+                      rawItem: s,
+                    })),
+                    ...custPayments.map(pay => ({
+                      type: 'payment' as const,
+                      id: pay.id,
+                      date: pay.date,
+                      ref: pay.receiptNumber,
+                      amount: pay.amount,
+                      subtitle: `سند قبض نقدية (${pay.paymentMethod === 'cash' ? 'نقداً' : pay.paymentMethod === 'card' ? 'بطاقة' : pay.paymentMethod === 'transfer' ? 'تحويل' : 'شيك'})`,
+                      rawItem: pay,
+                    }))
+                  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                  if (timeline.length === 0) {
+                    return <div className="text-center py-6 text-slate-500 text-xs">لا توجد حركات أو فواتير مسجلة لهذا العميل</div>;
                   }
-                  return custSales.map(s => (
+
+                  return timeline.map(item => (
                     <div 
-                      key={s.id} 
+                      key={item.id} 
                       onClick={() => {
-                        onOpenSaleInvoice(s);
-                        setStatementPartner(null);
+                        if (item.type === 'invoice') {
+                          onOpenSaleInvoice(item.rawItem);
+                          setStatementPartner(null);
+                        }
                       }}
-                      className="bg-slate-800/80 hover:bg-slate-800 p-2.5 rounded-xl border border-slate-750 flex items-center justify-between text-xs cursor-pointer"
+                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                        item.type === 'payment'
+                          ? 'bg-emerald-950/25 border-emerald-800/40 text-emerald-200'
+                          : 'bg-slate-800/80 hover:bg-slate-800 border-slate-750 cursor-pointer'
+                      }`}
                     >
                       <div>
-                        <div className="font-bold text-white font-mono">{s.invoiceNumber}</div>
-                        <div className="text-[10.5px] text-slate-400 mt-0.5">{formatArabicDateTime(s.date)}</div>
+                        <div className="flex items-center gap-1.5 font-bold font-mono">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                            item.type === 'payment' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700 text-slate-300'
+                          }`}>
+                            {item.type === 'payment' ? 'سند قبض' : 'فاتورة مبيعات'}
+                          </span>
+                          <span className="text-white">{item.ref}</span>
+                        </div>
+                        <div className="text-[10.5px] text-slate-400 mt-0.5">{formatArabicDateTime(item.date)}</div>
+                        <div className="text-[10px] text-slate-400">{item.subtitle}</div>
                       </div>
                       <div className="text-left">
-                        <div className="font-black text-emerald-400">{formatCurrency(s.netAmount, currency)}</div>
-                        <span className="text-[10px] text-slate-400">ربح: {formatCurrency(s.totalProfit, currency)}</span>
+                        <div className={`font-black font-mono ${
+                          item.type === 'payment' ? 'text-emerald-400' : 'text-white'
+                        }`}>
+                          {item.type === 'payment' ? '-' : '+'}{formatCurrency(item.amount, currency)}
+                        </div>
+                        {item.type === 'payment' && (
+                          <span className="text-[10px] text-emerald-400 font-bold block">تم القبض</span>
+                        )}
                       </div>
                     </div>
                   ));
@@ -1184,10 +1330,39 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
               )}
             </div>
 
-            <div className="pt-2 border-t border-slate-800 shrink-0">
+            {/* Statement Drawer Bottom Actions */}
+            <div className="pt-2.5 border-t border-slate-800 shrink-0 space-y-2">
+              {statementPartner.type === 'customer' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const custId = statementPartner.data.id;
+                    setStatementPartner(null);
+                    onStartSaleForCustomer(custId);
+                  }}
+                  className="w-full py-2.5 bg-emerald-600/25 hover:bg-emerald-600/35 text-emerald-300 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-emerald-500/40 transition-all active:scale-95 shadow-sm"
+                >
+                  <ShoppingCart className="w-4 h-4 text-emerald-400" />
+                  <span>فاتورة بيع جديدة لهذا العميل</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  const targetToPay = statementPartner;
+                  setStatementPartner(null);
+                  setPaymentTarget(targetToPay);
+                }}
+                className="w-full py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-amber-500/40 transition-all active:scale-95 shadow-sm"
+              >
+                <Wallet className="w-4 h-4 text-amber-400" />
+                <span>تسجيل دفعة لهذا الحساب (عملية الدفع)</span>
+              </button>
+
               <button
                 onClick={() => setStatementPartner(null)}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs"
+                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-all"
               >
                 إغلاق
               </button>
@@ -1473,6 +1648,21 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
         currency={currency}
         onBulkImportCustomers={onBulkImportCustomers || (() => {})}
         onBulkImportSuppliers={onBulkImportSuppliers || (() => {})}
+      />
+
+      {/* Partner Payment Modal (عملية الدفع - سند قبض / سند صرف) */}
+      <PaymentModal
+        isOpen={!!paymentTarget}
+        partner={paymentTarget}
+        currency={currency}
+        onClose={() => setPaymentTarget(null)}
+        onSavePayment={(newPayment) => {
+          if (onRecordPayment) {
+            onRecordPayment(newPayment);
+          }
+          setToastMessage(`تم تسجيل عملية الدفع بنجاح بقيمة ${formatCurrency(newPayment.amount, currency)}`);
+          setTimeout(() => setToastMessage(null), 4000);
+        }}
       />
 
       {/* Floating Toast Message */}

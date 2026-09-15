@@ -208,3 +208,19 @@ export interface AppPreferences {
   currency?: string;
   updatedAt?: string;
 }
+
+export interface PartnerPayment {
+  id: string;
+  receiptNumber: string;
+  partnerType: 'customer' | 'supplier';
+  partnerId: string;
+  partnerName: string;
+  partnerPhone?: string;
+  amount: number;
+  date: string; // ISO format or YYYY-MM-DDTHH:mm
+  paymentMethod: 'cash' | 'card' | 'transfer' | 'check';
+  previousBalance: number;
+  newBalance: number;
+  notes?: string;
+  createdAt: string;
+}

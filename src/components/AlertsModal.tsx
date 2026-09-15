@@ -37,22 +37,22 @@ export const AlertsModal: React.FC<AlertsModalProps> = ({
     >
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-slate-900 border border-amber-500/40 rounded-3xl w-full max-w-lg p-4 sm:p-5 shadow-2xl text-slate-100 my-auto max-h-[88vh] flex flex-col animate-in zoom-in-95"
+        className="bg-slate-900 border border-red-500/40 rounded-3xl w-full max-w-lg p-4 sm:p-5 shadow-2xl text-slate-100 my-auto max-h-[88vh] flex flex-col animate-in zoom-in-95"
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+            <div className="w-9 h-9 rounded-xl bg-red-500/20 text-red-500 flex items-center justify-center border border-red-500/35 shadow-[0_0_10px_rgba(239,68,68,0.2)]">
               <AlertTriangle className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-amber-200">تنبيهات نقص المخزون</h3>
-              <p className="text-xs text-amber-400/80">أصناف وصلت للحد الأدنى أو شارفت على النفاد</p>
+              <h3 className="font-extrabold text-base text-red-400 dark:text-red-300">تنبيهات نقص المخزون</h3>
+              <p className="text-xs text-red-400/80">أصناف وصلت للحد الأدنى أو شارفت على النفاد</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-slate-800"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-slate-800 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -80,7 +80,7 @@ export const AlertsModal: React.FC<AlertsModalProps> = ({
               return (
                 <div
                   key={product.id}
-                  className="bg-slate-850 border border-amber-500/30 rounded-2xl p-3.5 shadow-md flex flex-col gap-2.5"
+                  className="bg-slate-850 border border-red-500/30 rounded-2xl p-3.5 shadow-md flex flex-col gap-2.5"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -94,7 +94,7 @@ export const AlertsModal: React.FC<AlertsModalProps> = ({
                       </div>
                     </div>
 
-                    <span className="bg-rose-500/20 text-rose-400 border border-rose-500/40 text-[10.5px] font-black px-2 py-0.5 rounded-full shrink-0">
+                    <span className="bg-red-500/20 text-red-400 border border-red-500/40 text-[10.5px] font-black px-2.5 py-0.5 rounded-full shrink-0 shadow-xs">
                       متبقي: {product.stockPieces} {product.minorUnit}
                     </span>
                   </div>
@@ -102,14 +102,14 @@ export const AlertsModal: React.FC<AlertsModalProps> = ({
                   {/* Stock Level Progress */}
                   <div className="bg-slate-900/80 rounded-xl p-2.5 border border-slate-800 text-xs">
                     <div className="flex justify-between items-center text-[11px] text-slate-300 mb-1">
-                      <span>الرصيد الفعلي: <strong className="text-amber-400">{stockUnits.shortText}</strong></span>
+                      <span>الرصيد الفعلي: <strong className="text-red-400">{stockUnits.shortText}</strong></span>
                       <span className="text-slate-400">حد التنبيه: {product.minStockAlert} {product.minorUnit}</span>
                     </div>
 
                     {/* Visual Progress Bar */}
                     <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-rose-500 to-amber-500 rounded-full"
+                        className="h-full bg-gradient-to-r from-red-600 to-rose-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.4)]"
                         style={{
                           width: `${Math.min(100, Math.max(10, (product.stockPieces / (product.minStockAlert || 1)) * 100))}%`,
                         }}

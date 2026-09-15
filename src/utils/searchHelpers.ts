@@ -52,6 +52,32 @@ export const compactString = (text: string): string => {
 };
 
 /**
+ * Checks whether a compact query/token (spaces removed) matches across words in a text.
+ * To strictly prevent false-positive collisions (e.g. "Magma Milk" generating "mam" across word boundaries),
+ * the token MUST align with word boundaries: it must start at the beginning of some word and match
+ * consecutive concatenated words (like "كوكاكولا" matching "كوكا" + "كولا", or "ايسكريم" matching "ايس" + "كريم",
+ * or "kitkat" matching "kit" + "kat").
+ */
+export const checkWordAlignedCompoundMatch = (words: string[], token: string): boolean => {
+  if (!token || token.length < 3 || words.length < 2) return false;
+
+  for (let i = 0; i < words.length; i++) {
+    let combined = '';
+    for (let j = i; j < words.length; j++) {
+      combined += words[j];
+      if (combined === token || (combined.length >= token.length && combined.startsWith(token))) {
+        return true;
+      }
+      if (token.startsWith(combined)) {
+        continue;
+      }
+      break;
+    }
+  }
+  return false;
+};
+
+/**
  * Extracts distinct search tokens from user query.
  * Splits on whitespace and common delimiters (space, comma, plus, slash).
  */
@@ -75,6 +101,12 @@ export const getArabicTokenVariants = (token: string): string[] => {
   const variants = new Set<string>();
   variants.add(token);
 
+  // If token is not Arabic, do not apply Arabic affix rules
+  const isArabic = /[\u0600-\u06FF]/.test(token);
+  if (!isArabic) {
+    return [token];
+  }
+
   // Multi-letter Arabic prefixes: وال, بال, فال, كال, لل
   for (const prefix of ['وال', 'بال', 'فال', 'كال', 'لل']) {
     if (token.startsWith(prefix) && token.length > prefix.length + 1) {
@@ -87,7 +119,7 @@ export const getArabicTokenVariants = (token: string): string[] => {
   // Definite article 'ال'
   if (token.startsWith('ال') && token.length > 3) {
     variants.add(token.slice(2));
-  } else if (!token.startsWith('ال') && token.length >= 2) {
+  } else if (!token.startsWith('ال') && token.length >= 3) {
     // If user searched without 'ال', try also with 'ال'
     variants.add('ال' + token);
   }
@@ -112,115 +144,17 @@ export const getArabicTokenVariants = (token: string): string[] => {
     variants.add(token.slice(0, -2));
   }
 
-  // Dialect substitutions: ط <-> ت (شوكولاطة <-> شوكولاتة, كاطو <-> كاتو, بطاطا <-> بتاتا)
-  if (token.includes('ط')) {
-    variants.add(token.replace(/ط/g, 'ت'));
-  }
-  if (token.includes('ت')) {
-    variants.add(token.replace(/ت/g, 'ط'));
-  }
-  // ق <-> ك (قاطو <-> كاتو, قوفريت <-> كوفريت)
-  if (token.includes('ق')) {
-    variants.add(token.replace(/ق/g, 'ك'));
+  // Dialect substitutions: ط <-> ت (شوكولاطة <-> شوكولاتة, كاطو <-> كاتو)
+  if (token.length >= 3) {
+    if (token.includes('ط')) {
+      variants.add(token.replace(/ط/g, 'ت'));
+    }
+    if (token.includes('ت')) {
+      variants.add(token.replace(/ت/g, 'ط'));
+    }
   }
 
   return Array.from(variants);
-};
-
-/**
- * Approximate phonetic transliteration between Latin and Arabic
- * Allows searching English/French brand names using Arabic letters and vice-versa
- * (e.g. MAXON <-> ماكسون / ماكس, CARRE <-> كاريه / كاري, SANDWICH <-> سندويتش).
- */
-export const getPhoneticEquivalents = (token: string): string[] => {
-  const results = new Set<string>();
-
-  // Latin to Arabic transliteration
-  if (/^[a-z0-9]+$/i.test(token)) {
-    let ar = token.toLowerCase();
-    // Multi-letter sounds
-    ar = ar.replace(/sh|ch/g, 'ش');
-    ar = ar.replace(/th/g, 'ث');
-    ar = ar.replace(/kh/g, 'خ');
-    ar = ar.replace(/gh/g, 'غ');
-    ar = ar.replace(/ph/g, 'ف');
-    ar = ar.replace(/x/g, 'كس');
-    ar = ar.replace(/ck/g, 'ك');
-    ar = ar.replace(/ee|ea/g, 'ي');
-    ar = ar.replace(/oo|ou/g, 'و');
-    ar = ar.replace(/qu/g, 'ك');
-    // Single letters
-    ar = ar.replace(/b|p/g, 'ب');
-    ar = ar.replace(/c|k|q/g, 'ك');
-    ar = ar.replace(/d/g, 'د');
-    ar = ar.replace(/f|v/g, 'ف');
-    ar = ar.replace(/g/g, 'ج');
-    ar = ar.replace(/h/g, 'ه');
-    ar = ar.replace(/j/g, 'ج');
-    ar = ar.replace(/l/g, 'ل');
-    ar = ar.replace(/m/g, 'م');
-    ar = ar.replace(/n/g, 'ن');
-    ar = ar.replace(/r/g, 'ر');
-    ar = ar.replace(/s/g, 'س');
-    ar = ar.replace(/t/g, 'ت');
-    ar = ar.replace(/w/g, 'و');
-    ar = ar.replace(/y|i/g, 'ي');
-    ar = ar.replace(/z/g, 'ز');
-    ar = ar.replace(/a/g, 'ا');
-    ar = ar.replace(/o|u/g, 'و');
-    ar = ar.replace(/e/g, 'ي');
-
-    const normAr = normalizeSearchText(ar);
-    if (normAr && normAr.length >= 2) results.add(normAr);
-
-    // Also version without long vowels
-    const shortAr = normAr.replace(/[اوي]/g, '');
-    if (shortAr.length >= 2) results.add(shortAr);
-  }
-
-  // Arabic to Latin transliteration
-  if (/[\u0600-\u06FF]/.test(token)) {
-    let lat = token;
-    lat = lat.replace(/كس/g, 'x');
-    lat = lat.replace(/ش/g, 'sh');
-    lat = lat.replace(/خ/g, 'kh');
-    lat = lat.replace(/غ/g, 'gh');
-    lat = lat.replace(/ب/g, 'b');
-    lat = lat.replace(/ت|ط/g, 't');
-    lat = lat.replace(/ث/g, 'th');
-    lat = lat.replace(/ج/g, 'j');
-    lat = lat.replace(/ح|ه/g, 'h');
-    lat = lat.replace(/د|ض/g, 'd');
-    lat = lat.replace(/ذ|ز|ظ/g, 'z');
-    lat = lat.replace(/ر/g, 'r');
-    lat = lat.replace(/س|ص/g, 's');
-    lat = lat.replace(/ف/g, 'f');
-    lat = lat.replace(/ق|ك/g, 'k');
-    lat = lat.replace(/ل/g, 'l');
-    lat = lat.replace(/م/g, 'm');
-    lat = lat.replace(/ن/g, 'n');
-    lat = lat.replace(/و/g, 'o');
-    lat = lat.replace(/ي/g, 'i');
-    lat = lat.replace(/ا/g, 'a');
-    if (lat && lat.length >= 2) results.add(lat.toLowerCase());
-  }
-
-  return Array.from(results);
-};
-
-/**
- * Tests if token's characters appear in word in order (sub-sequence / typo tolerance).
- * Handles dropped vowels like "سندوتش" in "سندويتش", "بسكوت" in "بسكويت", "مكسون" in "ماكسون".
- */
-export const isSubsequenceMatch = (token: string, text: string): boolean => {
-  if (token.length < 3 || text.length < token.length) return false;
-  let tIdx = 0;
-  for (let i = 0; i < text.length && tIdx < token.length; i++) {
-    if (text[i] === token[tIdx]) {
-      tIdx++;
-    }
-  }
-  return tIdx === token.length;
 };
 
 export interface MatchScoreResult {
@@ -231,13 +165,13 @@ export interface MatchScoreResult {
 }
 
 /**
- * Tests if a product matches search tokens and computes an intelligent relevance score.
- * Supports:
- * - Substring matching across ANY part of any word (beginning, middle, end, infix)
- * - Arabic diacritics, letter normalizations, and prefix/suffix stripping
- * - Space-agnostic compound matching (e.g. "ايس كريم" matches "ايسكريم", "6x24" matches "6 x 24")
- * - Subsequence vowel tolerance (e.g. "سندوتش" matches "سندويتش", "بسكوت" matches "بسكويت")
- * - Phonetic Latin-Arabic cross-language matching (e.g. "ماكس" matches "MAXON")
+ * Tests if a product matches search tokens strictly and computes relevance score.
+ * Enforces strict matching to the specified terms (الاصناف المحددة فقط):
+ * - Contiguous substring / infix matching in product name (e.g. "ندوي" matches "سندويتش", "saa" matches "(di saa)")
+ * - Arabic diacritics and character normalization (أ/إ/آ -> ا, ة/ه -> ه, ي/ى/ئ -> ي)
+ * - Space-agnostic compound matching (e.g. "ايس كريم" matches "ايسكريم")
+ * - Full/partial barcode matching
+ * - Exact price match for numeric searches
  */
 export const scoreProductMatch = (
   product: Product,
@@ -258,26 +192,18 @@ export const scoreProductMatch = (
 
   const normName = normalizeSearchText(product.name);
   const compactName = compactString(normName);
-
-  const normCategory = normalizeSearchText(product.category || '');
-  const compactCategory = compactString(normCategory);
-
-  const barcode = (product.barcode || '').toLowerCase().trim();
-  const minorSale = product.salePriceMinor.toString();
-  const majorSale = product.salePriceMajor.toString();
-  const minorPurch = product.purchasePriceMinor.toString();
-  const majorPurch = product.purchasePriceMajor.toString();
-  const numQuery = parseFloat(rawQuery.trim());
-  const isQueryNumber = !isNaN(numQuery) && rawQuery.trim().length > 0;
-
-  // Words in the product name
   const nameWords = normName.split(/[\s+,/\\-]+/).filter(w => w.length > 0);
 
-  const matchReasons: string[] = [];
-  let score = 0;
+  const normCategory = normalizeSearchText(product.category || '');
+
+  const barcode = (product.barcode || '').toLowerCase().trim();
+  const minorSale = product.salePriceMinor;
+  const majorSale = product.salePriceMajor;
+  const numQuery = parseFloat(rawQuery.trim());
+  const isQueryNumber = !isNaN(numQuery) && rawQuery.trim().length > 0 && /^\d+(\.\d+)?$/.test(rawQuery.trim());
 
   // 1. Direct barcode match
-  if (barcode && (barcode === normQuery || barcode === rawQuery.trim())) {
+  if (barcode && (barcode === normQuery || barcode === rawQuery.trim().toLowerCase())) {
     return {
       matches: true,
       score: 5000,
@@ -286,136 +212,117 @@ export const scoreProductMatch = (
     };
   }
   if (barcode && barcode.startsWith(normQuery)) {
-    score += 2500;
-    matchReasons.push('barcode_prefix');
-  } else if (barcode && barcode.includes(normQuery)) {
-    score += 1500;
-    matchReasons.push('barcode_partial');
+    return {
+      matches: true,
+      score: 3000,
+      matchedTokensCount: tokens.length,
+      matchReasons: ['barcode_prefix'],
+    };
   }
 
-  // 2. Direct name phrase matches
+  // 2. Direct exact name match
   if (normName === normQuery) {
-    score += 4000;
-    matchReasons.push('name_exact');
-  } else if (normName.startsWith(normQuery)) {
+    return {
+      matches: true,
+      score: 4000,
+      matchedTokensCount: tokens.length,
+      matchReasons: ['name_exact'],
+    };
+  }
+
+  let score = 0;
+  const matchReasons: string[] = [];
+
+  if (normName.startsWith(normQuery)) {
     score += 2500;
     matchReasons.push('name_prefix');
   } else if (normName.includes(normQuery)) {
     score += 1800;
     matchReasons.push('name_phrase');
-  } else if (compactName.includes(compactQuery) && compactQuery.length >= 2) {
-    // Space-agnostic match (e.g. "ايس كريم" typed for "ايسكريم" or vice-versa)
+  } else if (compactQuery.length >= 3 && checkWordAlignedCompoundMatch(nameWords, compactQuery)) {
     score += 1600;
     matchReasons.push('name_compact_phrase');
   }
 
-  // 3. Exact Price match
-  if (isQueryNumber) {
+  // 3. Exact Price match (only when the whole query is a valid price number)
+  if (isQueryNumber && numQuery > 0) {
     if (
-      Math.abs(product.salePriceMinor - numQuery) < 0.01 ||
-      Math.abs(product.salePriceMajor - numQuery) < 0.01 ||
-      Math.abs(product.purchasePriceMinor - numQuery) < 0.01 ||
-      Math.abs(product.purchasePriceMajor - numQuery) < 0.01
+      Math.abs(minorSale - numQuery) < 0.01 ||
+      Math.abs(majorSale - numQuery) < 0.01
     ) {
-      score += 1600;
+      score += 2000;
       matchReasons.push('price_exact');
     }
   }
 
-  // 4. Token-by-Token Matching: Every token MUST match at least one aspect of the product
+  // 4. Token-by-Token Matching: Every token MUST strictly match the product
   let matchedTokensCount = 0;
 
   for (const token of tokens) {
     const compactToken = compactString(token);
     const variants = getArabicTokenVariants(token);
-    const phoneticVariants = getPhoneticEquivalents(token);
 
     let tokenMatched = false;
     let tokenScore = 0;
 
-    // A. Check token and variants directly in product name (ANY part of word / Infix match)
+    // A. Contiguous Substring match in product name (ANY part of word: beginning, middle, end)
     for (const v of variants) {
       if (normName.includes(v)) {
         tokenMatched = true;
-        // Check how it matches in individual words of the name
         if (nameWords.some(w => w === v)) {
-          tokenScore = Math.max(tokenScore, 240); // Exact word match
+          tokenScore = Math.max(tokenScore, 300); // Exact word
         } else if (nameWords.some(w => w.startsWith(v))) {
-          tokenScore = Math.max(tokenScore, 190); // Word starts with token
+          tokenScore = Math.max(tokenScore, 240); // Word starts with token
         } else if (nameWords.some(w => w.endsWith(v))) {
-          tokenScore = Math.max(tokenScore, 160); // Word ends with token
+          tokenScore = Math.max(tokenScore, 200); // Word ends with token
         } else {
-          tokenScore = Math.max(tokenScore, 140); // Infix / middle of word
+          tokenScore = Math.max(tokenScore, 180); // Infix / middle of word (e.g. ندوي in سندويتش)
         }
         break;
       }
     }
 
-    // B. Space-agnostic compact match in name (e.g. "6x24" in "6x24pies" or "كوكاكولا" in "كوكا كولا")
-    if (!tokenMatched && compactToken.length >= 2 && compactName.includes(compactToken)) {
+    // B. Space-agnostic word-aligned compound match (e.g. "كوكاكولا" in "كوكا كولا" or "ايسكريم" in "ايس كريم")
+    if (!tokenMatched && compactToken.length >= 3 && checkWordAlignedCompoundMatch(nameWords, compactToken)) {
       tokenMatched = true;
-      tokenScore = Math.max(tokenScore, 130);
+      tokenScore = Math.max(tokenScore, 170);
     }
 
-    // C. Sub-sequence character match in words (vowel dropped / minor typo e.g. "سندوتش" in "سندويتش")
-    if (!tokenMatched && token.length >= 3) {
-      for (const w of nameWords) {
-        if (isSubsequenceMatch(token, w)) {
-          tokenMatched = true;
-          tokenScore = Math.max(tokenScore, 110);
-          break;
-        }
+    // C. Barcode match
+    if (!tokenMatched && barcode && barcode.includes(token)) {
+      tokenMatched = true;
+      tokenScore = Math.max(tokenScore, 250);
+    }
+
+    // D. Category match (only if category matches the token or starts with it)
+    if (!tokenMatched && normCategory) {
+      if (normCategory === token || variants.some(v => normCategory === v)) {
+        tokenMatched = true;
+        tokenScore = Math.max(tokenScore, 120);
+      } else if (variants.some(v => normCategory.startsWith(v) && v.length >= 3)) {
+        tokenMatched = true;
+        tokenScore = Math.max(tokenScore, 100);
       }
     }
 
-    // D. Phonetic / Transliteration match (e.g. "ماكس" for "MAXON", "كار" for "CARRE")
-    if (!tokenMatched && phoneticVariants.length > 0) {
-      for (const pv of phoneticVariants) {
-        if (normName.includes(pv) || compactName.includes(pv)) {
-          tokenMatched = true;
-          tokenScore = Math.max(tokenScore, 100);
-          break;
-        }
-        if (nameWords.some(w => isSubsequenceMatch(pv, w))) {
-          tokenMatched = true;
-          tokenScore = Math.max(tokenScore, 85);
-          break;
-        }
+    // E. Price exact match (only for numeric token matching price)
+    if (!tokenMatched && /^\d+(\.\d+)?$/.test(token)) {
+      const tokNum = parseFloat(token);
+      if (tokNum > 0 && (Math.abs(minorSale - tokNum) < 0.01 || Math.abs(majorSale - tokNum) < 0.01)) {
+        tokenMatched = true;
+        tokenScore = Math.max(tokenScore, 150);
       }
-    }
-
-    // E. Check token in Barcode
-    if (barcode && barcode.includes(token)) {
-      tokenMatched = true;
-      tokenScore = Math.max(tokenScore, 200);
-    }
-
-    // F. Check token in Category
-    if (normCategory && (normCategory.includes(token) || compactCategory.includes(compactToken))) {
-      tokenMatched = true;
-      tokenScore = Math.max(tokenScore, 80);
-    }
-
-    // G. Check token in Prices
-    if (
-      minorSale.includes(token) ||
-      majorSale.includes(token) ||
-      minorPurch.includes(token) ||
-      majorPurch.includes(token)
-    ) {
-      tokenMatched = true;
-      tokenScore = Math.max(tokenScore, 90);
     }
 
     if (tokenMatched) {
       matchedTokensCount++;
       score += tokenScore;
     } else {
-      // If even ONE token fails to match anything in the product, product does not match!
+      // If even ONE token fails to match, the product DOES NOT MATCH!
       return {
         matches: false,
         score: 0,
-        matchedTokensCount,
+        matchedTokensCount: 0,
         matchReasons: [],
       };
     }
@@ -424,14 +331,14 @@ export const scoreProductMatch = (
   // Bonus if all tokens match in the name itself
   const allInName = tokens.every(t => {
     const vars = getArabicTokenVariants(t);
-    return vars.some(v => normName.includes(v)) || compactName.includes(compactString(t));
+    return vars.some(v => normName.includes(v)) || checkWordAlignedCompoundMatch(nameWords, compactString(t));
   });
   if (allInName) {
-    score += 600;
+    score += 500;
     matchReasons.push('all_tokens_in_name');
   }
 
-  // Bonus for in-order token appearance in product name
+  // In-order appearance bonus
   if (tokens.length > 1 && allInName) {
     let lastIndex = -1;
     let inOrder = true;
@@ -453,14 +360,14 @@ export const scoreProductMatch = (
       }
     }
     if (inOrder) {
-      score += 350;
+      score += 250;
       matchReasons.push('in_order_match');
     }
   }
 
-  // Bonus for product availability in stock
+  // In-stock bonus (small boost for sorting order)
   if (product.stockPieces > 0) {
-    score += 50;
+    score += 30;
   }
 
   return {
@@ -561,4 +468,269 @@ export const buildHighlightRegex = (query: string): RegExp | null => {
     return null;
   }
 };
+
+/**
+ * Phonetic transliteration from French/Latin to Arabic for customer name search.
+ * Handles common North African / Arab names and algorithmic character conversion.
+ */
+export const latinToArabicPhonetic = (latinText: string): string[] => {
+  const norm = normalizeSearchText(latinText).toLowerCase();
+  if (!norm || !/^[a-z0-9\s]+$/.test(norm)) return [];
+
+  const commonNames: Record<string, string[]> = {
+    adam: ['ادم'],
+    adame: ['ادم'],
+    lahar: ['لحار', 'لحارة'],
+    lahara: ['لحارة'],
+    ahmed: ['احمد'],
+    ahmad: ['احمد'],
+    mohamed: ['محمد'],
+    mohammed: ['محمد'],
+    med: ['محمد'],
+    mhamed: ['محمد'],
+    karim: ['كريم'],
+    khalil: ['خليل'],
+    khaled: ['خالد'],
+    ali: ['علي'],
+    omar: ['عمر'],
+    othman: ['عثمان'],
+    otman: ['عثمان'],
+    yacine: ['ياسين'],
+    yasin: ['ياسين'],
+    samir: ['سمير'],
+    sami: ['سامي'],
+    walid: ['وليد'],
+    mostefa: ['مصطفى'],
+    mustapha: ['مصطفى'],
+    mourad: ['مراد'],
+    morad: ['مراد'],
+    rachid: ['رشيد'],
+    hassan: ['حسن', 'حسان'],
+    hasan: ['حسن'],
+    amine: ['امين'],
+    amin: ['امين'],
+    bilal: ['بلال'],
+    tarek: ['طارق'],
+    tarik: ['طارق'],
+    sofiane: ['سفيان'],
+    soufiane: ['سفيان'],
+    brahim: ['ابراهيم'],
+    ibrahim: ['ابراهيم'],
+    fouad: ['فؤاد'],
+    adel: ['عادل'],
+    nabil: ['نبيل'],
+    salim: ['سليم'],
+    hichem: ['هشام'],
+    hisham: ['هشام'],
+    ayoub: ['ايوب'],
+    hamza: ['حمزة'],
+    djamel: ['جمال'],
+    djamal: ['جمال'],
+    jamel: ['جمال'],
+    riad: ['رياض'],
+    riadh: ['رياض'],
+    redha: ['رضا'],
+    reda: ['رضا'],
+    sarl: ['سارل', 'شركة'],
+    eurl: ['ايورل', 'مؤسسة'],
+    ets: ['مؤسسة']
+  };
+
+  const results = new Set<string>();
+  if (commonNames[norm]) {
+    commonNames[norm].forEach(n => results.add(n));
+  }
+
+  // Algorithmic phonetic conversion
+  let converted = norm
+    .replace(/ch|sh/g, 'ش')
+    .replace(/kh/g, 'خ')
+    .replace(/gh/g, 'غ')
+    .replace(/dj/g, 'ج')
+    .replace(/th/g, 'ث')
+    .replace(/dh/g, 'ذ')
+    .replace(/ou/g, 'و')
+    .replace(/ph/g, 'ف')
+    .replace(/b/g, 'ب')
+    .replace(/t/g, 'ت')
+    .replace(/j/g, 'ج')
+    .replace(/h/g, 'ه')
+    .replace(/d/g, 'د')
+    .replace(/r/g, 'ر')
+    .replace(/z/g, 'ز')
+    .replace(/s/g, 'س')
+    .replace(/f/g, 'ف')
+    .replace(/q/g, 'ق')
+    .replace(/k/g, 'ك')
+    .replace(/l/g, 'ل')
+    .replace(/m/g, 'م')
+    .replace(/n/g, 'ن')
+    .replace(/w/g, 'و')
+    .replace(/y/g, 'ي')
+    .replace(/a/g, 'ا')
+    .replace(/i/g, 'ي')
+    .replace(/o/g, 'و')
+    .replace(/u/g, 'و')
+    .replace(/e/g, '');
+
+  if (converted.length >= 2) {
+    results.add(converted);
+  }
+
+  return Array.from(results);
+};
+
+/**
+ * Phonetic transliteration from Arabic to Latin/French for customer search.
+ */
+export const arabicToLatinPhonetic = (arabicText: string): string[] => {
+  const norm = normalizeSearchText(arabicText);
+  if (!norm || !/[\u0600-\u06FF]/.test(norm)) return [];
+
+  const commonArabic: Record<string, string[]> = {
+    'ادم': ['adam', 'adame'],
+    'لحار': ['lahar', 'lahara'],
+    'لحارة': ['lahara', 'lahar'],
+    'احمد': ['ahmed', 'ahmad'],
+    'محمد': ['mohamed', 'mohammed', 'med'],
+    'كريم': ['karim'],
+    'خليل': ['khalil'],
+    'خالد': ['khaled', 'khalid'],
+    'علي': ['ali'],
+    'عمر': ['omar'],
+    'عثمان': ['othman', 'otman'],
+    'ياسين': ['yacine', 'yasin'],
+    'سمير': ['samir'],
+    'سامي': ['sami'],
+    'وليد': ['walid'],
+    'مصطفى': ['mostefa', 'mustapha'],
+    'مراد': ['mourad', 'morad'],
+    'رشيد': ['rachid'],
+    'حسن': ['hassan', 'hasan'],
+    'حسان': ['hassan'],
+    'امين': ['amine', 'amin'],
+    'بلال': ['bilal'],
+    'طارق': ['tarek', 'tarik'],
+    'سفيان': ['sofiane', 'soufiane'],
+    'ابراهيم': ['brahim', 'ibrahim'],
+    'عادل': ['adel'],
+    'نبيل': ['nabil'],
+    'سليم': ['salim'],
+    'هشام': ['hichem', 'hisham'],
+    'ايوب': ['ayoub'],
+    'حمزة': ['hamza'],
+    'جمال': ['djamel', 'jamel'],
+    'رياض': ['riad', 'riadh'],
+    'رضا': ['redha', 'reda']
+  };
+
+  const results = new Set<string>();
+  if (commonArabic[norm]) {
+    commonArabic[norm].forEach(n => results.add(n));
+  }
+
+  // Algorithmic conversion
+  let lat = norm
+    .replace(/ش/g, 'ch')
+    .replace(/خ/g, 'kh')
+    .replace(/غ/g, 'gh')
+    .replace(/ج/g, 'j')
+    .replace(/ث/g, 'th')
+    .replace(/ذ/g, 'dh')
+    .replace(/ض/g, 'd')
+    .replace(/ص/g, 's')
+    .replace(/ط/g, 't')
+    .replace(/ظ/g, 'z')
+    .replace(/ع/g, 'a')
+    .replace(/ح/g, 'h')
+    .replace(/ف/g, 'f')
+    .replace(/ق/g, 'q')
+    .replace(/ك/g, 'k')
+    .replace(/ل/g, 'l')
+    .replace(/م/g, 'm')
+    .replace(/ن/g, 'n')
+    .replace(/ه/g, 'h')
+    .replace(/و/g, 'ou')
+    .replace(/ي/g, 'i')
+    .replace(/ب/g, 'b')
+    .replace(/ت/g, 't')
+    .replace(/د/g, 'd')
+    .replace(/ر/g, 'r')
+    .replace(/ز/g, 'z')
+    .replace(/س/g, 's')
+    .replace(/ا/g, 'a');
+
+  if (lat.length >= 2) {
+    results.add(lat);
+  }
+
+  return Array.from(results);
+};
+
+/**
+ * Robust bilingual (Arabic / French) customer search matching:
+ * Matches whether name/query is in Arabic, French, Latin with accents, or phonetic transliteration.
+ */
+export const matchCustomerBilingual = (
+  customerName: string, 
+  phone: string | undefined, 
+  company: string | undefined, 
+  query: string
+): boolean => {
+  if (!query || !query.trim()) return true;
+
+  const normQuery = normalizeSearchText(query);
+  const compactQuery = compactString(normQuery);
+
+  const normName = normalizeSearchText(customerName);
+  const compactName = compactString(normName);
+  const nameWords = normName.split(/[\s+,/\\-]+/).filter(w => w.length > 0);
+
+  const normPhone = normalizeSearchText(phone || '');
+  const compactPhone = compactString(normPhone);
+
+  const normCompany = normalizeSearchText(company || '');
+  const compactCompany = compactString(normCompany);
+
+  // Direct exact/substring match
+  if (normName.includes(normQuery)) return true;
+  if (compactQuery.length >= 3 && checkWordAlignedCompoundMatch(nameWords, compactQuery)) return true;
+  if (compactPhone && compactPhone.includes(compactQuery)) return true;
+  if (compactCompany && compactCompany.includes(compactQuery)) return true;
+
+  // Bilingual phonetics
+  const arPhonetics = latinToArabicPhonetic(normQuery);
+  for (const ar of arPhonetics) {
+    if (normName.includes(ar) || (compactString(ar).length >= 3 && checkWordAlignedCompoundMatch(nameWords, compactString(ar)))) return true;
+  }
+
+  const latPhonetics = arabicToLatinPhonetic(normQuery);
+  for (const lat of latPhonetics) {
+    if (normName.includes(lat) || (compactString(lat).length >= 3 && checkWordAlignedCompoundMatch(nameWords, compactString(lat)))) return true;
+  }
+
+  // Token-by-token
+  const tokens = extractSearchTokens(query);
+  if (tokens.length > 0) {
+    const allTokensMatch = tokens.every(token => {
+      const compactTok = compactString(token);
+      if (normName.includes(token) || (compactTok.length >= 3 && checkWordAlignedCompoundMatch(nameWords, compactTok))) return true;
+      if (normPhone.includes(token) || compactPhone.includes(compactTok)) return true;
+      if (normCompany.includes(token) || compactCompany.includes(compactTok)) return true;
+
+      const tokAr = latinToArabicPhonetic(token);
+      if (tokAr.some(v => normName.includes(v) || (compactString(v).length >= 3 && checkWordAlignedCompoundMatch(nameWords, compactString(v))))) return true;
+
+      const tokLat = arabicToLatinPhonetic(token);
+      if (tokLat.some(v => normName.includes(v) || (compactString(v).length >= 3 && checkWordAlignedCompoundMatch(nameWords, compactString(v))))) return true;
+
+      return false;
+    });
+
+    if (allTokensMatch) return true;
+  }
+
+  return false;
+};
+
 

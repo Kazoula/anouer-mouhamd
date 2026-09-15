@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Plus, 
   Minus,
@@ -59,6 +59,7 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
   const [discount, setDiscount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'credit'>('cash');
   const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [paidAmountRaw, setPaidAmountRaw] = useState<string>('0');
   const [updateProductPrices, setUpdateProductPrices] = useState<boolean>(true);
   const [notes, setNotes] = useState<string>('');
 
@@ -73,6 +74,7 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
   const searchSectionRef = useRef<HTMLDivElement>(null);
   const insertItemSectionRef = useRef<HTMLDivElement>(null);
   const addToCartBtnRef = useRef<HTMLButtonElement>(null);
+  const paidAmountInputRef = useRef<HTMLInputElement>(null);
 
   const openNewPurchase = (prodId?: string) => {
     const sup = suppliers[0];
@@ -84,6 +86,7 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
     setDiscount(0);
     setPaymentMethod('cash');
     setPaidAmount(0);
+    setPaidAmountRaw('0');
     setUpdateProductPrices(true);
     setNotes('');
 
@@ -274,14 +277,38 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
   const subtotal = cartItems.reduce((acc, i) => acc + i.subtotal, 0);
   const netAmount = Math.max(0, subtotal - discount);
 
+  const focusPaidAmountInput = () => {
+    setTimeout(() => {
+      if (paidAmountInputRef.current) {
+        paidAmountInputRef.current.focus();
+        paidAmountInputRef.current.select();
+        try {
+          paidAmountInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } catch {
+          // ignore
+        }
+      }
+    }, 70);
+  };
+
   const handlePaymentMethodChange = (method: 'cash' | 'transfer' | 'credit') => {
     setPaymentMethod(method);
     if (method === 'credit') {
       setPaidAmount(0);
+      setPaidAmountRaw('');
+      focusPaidAmountInput();
     } else {
       setPaidAmount(netAmount);
+      setPaidAmountRaw(netAmount.toString());
     }
   };
+
+  useEffect(() => {
+    if (paymentMethod !== 'credit') {
+      setPaidAmount(netAmount);
+      setPaidAmountRaw(netAmount.toString());
+    }
+  }, [netAmount, paymentMethod]);
 
   const handleSavePurchaseSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -815,11 +842,179 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-bold"
                     >
                       <option value="cash">نقداً (كاش)</option>
-                      <option value="transfer">تحويل بنكي</option>
                       <option value="credit">آجل (مستحق للمورد)</option>
+                      <option value="transfer">تحويل بنكي</option>
                     </select>
                   </div>
                 </div>
+
+                {/* Quick Payment Method Selector */}
+                <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handlePaymentMethodChange('cash')}
+                    className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
+                      paymentMethod === 'cash'
+                        ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                        : 'bg-slate-900 text-slate-300 border-slate-750 hover:bg-slate-800'
+                    }`}
+                  >
+                    نقداً (كاش)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePaymentMethodChange('credit')}
+                    className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center flex items-center justify-center gap-1 ${
+                      paymentMethod === 'credit'
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md font-black ring-2 ring-amber-400/40'
+                        : 'bg-slate-900 text-amber-300 border-amber-500/40 hover:bg-amber-500/15'
+                    }`}
+                  >
+                    <span>آجل للمورد</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${paymentMethod === 'credit' ? 'bg-slate-950' : 'bg-amber-400'}`}></span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePaymentMethodChange('transfer')}
+                    className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
+                      paymentMethod === 'transfer'
+                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
+                        : 'bg-slate-900 text-slate-300 border-slate-750 hover:bg-slate-800'
+                    }`}
+                  >
+                    تحويل بنكي
+                  </button>
+                </div>
+
+                {/* Paid Amount for Credit (Immediately ready to enter without fighting 0) */}
+                {paymentMethod === 'credit' && (
+                  <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-2xl p-3 space-y-2.5 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-amber-300 font-black text-xs sm:text-sm flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <span>المبلغ المسدد للمورد مقدماً (دفعة نقدية)</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10.5px] text-amber-300/80 font-medium">
+                          {paidAmount === 0 ? 'آجل بالكامل (0)' : `${formatCurrency(paidAmount, currency)} مسدد`}
+                        </span>
+                        {paidAmount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPaidAmount(0);
+                              setPaidAmountRaw('');
+                              focusPaidAmountInput();
+                            }}
+                            className="text-[10px] text-rose-400 hover:text-rose-300 underline cursor-pointer"
+                          >
+                            مسح
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        ref={paidAmountInputRef}
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        max={netAmount}
+                        step="any"
+                        placeholder="0.00"
+                        value={paidAmountRaw}
+                        autoFocus
+                        onFocus={(e) => {
+                          e.target.select();
+                        }}
+                        onClick={(e) => {
+                          (e.target as HTMLInputElement).select();
+                        }}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPaidAmountRaw(val);
+                          const parsed = parseFloat(val);
+                          setPaidAmount(isNaN(parsed) ? 0 : Math.max(0, Math.min(netAmount, parsed)));
+                        }}
+                        onBlur={() => {
+                          if (!paidAmountRaw.trim() || isNaN(parseFloat(paidAmountRaw))) {
+                            setPaidAmount(0);
+                            setPaidAmountRaw('0');
+                          } else {
+                            const num = Math.max(0, Math.min(netAmount, parseFloat(paidAmountRaw)));
+                            setPaidAmount(num);
+                            setPaidAmountRaw(num.toString());
+                          }
+                        }}
+                        className="w-full bg-slate-900 border-2 border-amber-400/80 rounded-xl pr-3 pl-20 py-2 text-amber-300 font-black text-base sm:text-lg focus:outline-none focus:ring-2 focus:ring-amber-400 shadow-inner"
+                      />
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+                        <span className="text-xs font-black text-amber-400/90 font-mono">
+                          {currency}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Quick Shortcuts */}
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaidAmount(0);
+                          setPaidAmountRaw('0');
+                          focusPaidAmountInput();
+                        }}
+                        className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer text-center ${
+                          paidAmount === 0
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                            : 'bg-slate-900 text-amber-300/90 border-amber-500/30 hover:bg-amber-500/20'
+                        }`}
+                      >
+                        0 (آجل بالكامل)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const half = Math.round((netAmount / 2) * 100) / 100;
+                          setPaidAmount(half);
+                          setPaidAmountRaw(half.toString());
+                          focusPaidAmountInput();
+                        }}
+                        className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer text-center ${
+                          paidAmount === Math.round((netAmount / 2) * 100) / 100 && paidAmount > 0
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                            : 'bg-slate-900 text-amber-300/90 border-amber-500/30 hover:bg-amber-500/20'
+                        }`}
+                      >
+                        نصف المبلغ (50%)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaidAmount(netAmount);
+                          setPaidAmountRaw(netAmount.toString());
+                          focusPaidAmountInput();
+                        }}
+                        className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer text-center ${
+                          paidAmount === netAmount && netAmount > 0
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                            : 'bg-slate-900 text-amber-300/90 border-amber-500/30 hover:bg-amber-500/20'
+                        }`}
+                      >
+                        كامل المبلغ
+                      </button>
+                    </div>
+
+                    {/* Remaining Supplier Balance */}
+                    <div className="flex items-center justify-between text-xs pt-1 px-1 border-t border-amber-500/20 font-semibold">
+                      <span className="text-slate-400">المتبقي مستحق للمورد (آجل):</span>
+                      <span className="text-amber-400 font-black text-sm font-mono">
+                        {formatCurrency(Math.max(0, netAmount - paidAmount), currency)}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="bg-slate-900 p-3 rounded-xl border border-slate-750 space-y-1.5 text-xs">
                   <div className="flex justify-between text-slate-400">

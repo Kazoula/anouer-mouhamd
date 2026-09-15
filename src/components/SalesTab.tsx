@@ -33,6 +33,7 @@ import { Product, Customer, SaleInvoice, InvoiceItem } from '../types';
 import { formatCurrency, formatStockUnits, formatArabicDateTime } from '../utils/calculations';
 import { isDualUnitProduct, getPrimaryUnit, hasThreeUnits, getProductUnitsList } from '../utils/unitHelpers';
 import { SearchableProductSelect } from './SearchableProductSelect';
+import { CustomerSelectModal } from './CustomerSelectModal';
 import { soundEffects } from '../utils/soundEffects';
 import confetti from 'canvas-confetti';
 
@@ -46,6 +47,8 @@ interface SalesTabProps {
   onOpenInvoiceModal: (invoice: SaleInvoice) => void;
   onQuickAddCustomer?: (name: string, phone: string) => void;
   autoOpenNewModal?: boolean;
+  initialCustomerId?: string | null;
+  onReturnToCustomers?: () => void;
 }
 
 export const SalesTab: React.FC<SalesTabProps> = ({
@@ -58,14 +61,18 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   onOpenInvoiceModal,
   onQuickAddCustomer,
   autoOpenNewModal = false,
+  initialCustomerId = null,
+  onReturnToCustomers,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isNewSaleModalOpen, setIsNewSaleModalOpen] = useState(autoOpenNewModal);
   const [invoiceToDelete, setInvoiceToDelete] = useState<SaleInvoice | null>(null);
   const [revertStockOnDelete, setRevertStockOnDelete] = useState<boolean>(true);
   const [revertCustomerBalanceOnDelete, setRevertCustomerBalanceOnDelete] = useState<boolean>(true);
+  const [returnToCustomersAfterSale, setReturnToCustomersAfterSale] = useState<boolean>(!!initialCustomerId);
   
   // New Sale Form State
+  const [customerDealType, setCustomerDealType] = useState<'cash' | 'credit'>('cash');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [customCustomerName, setCustomCustomerName] = useState<string>('عميل نقدي');
   const [customerPhone, setCustomerPhone] = useState<string>('');
@@ -77,6 +84,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   const [discount, setDiscount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'credit'>('cash');
   const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [paidAmountRaw, setPaidAmountRaw] = useState<string>('0');
   const [notes, setNotes] = useState<string>('');
 
   // Item selector inside modal
@@ -96,14 +104,88 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   const [isBigSearchOpen, setIsBigSearchOpen] = useState<boolean>(false);
   const [openAllProductsTrigger, setOpenAllProductsTrigger] = useState<number>(0);
   const [directAddToast, setDirectAddToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
+  const [isCustomerSelectModalOpen, setIsCustomerSelectModalOpen] = useState<boolean>(false);
+  const [customerSearchInitialQuery, setCustomerSearchInitialQuery] = useState<string>('');
 
   // DOM Refs for seamless mobile navigation
   const searchSectionRef = useRef<HTMLDivElement>(null);
   const insertItemSectionRef = useRef<HTMLDivElement>(null);
   const addToCartBtnRef = useRef<HTMLButtonElement>(null);
+  const paidAmountInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCustomerDealTypeChange = (type: 'cash' | 'credit') => {
+    setCustomerDealType(type);
+    setFormError('');
+    if (type === 'credit') {
+      setPaymentMethod('credit');
+      setPaidAmount(0);
+      setPaidAmountRaw('');
+      if (customCustomerName === 'عميل نقدي') {
+        setCustomCustomerName('');
+      }
+      setCustomerSearchInitialQuery('');
+      // When user clicks 'credit', immediately open the full-screen advanced customer select modal!
+      setIsCustomerSelectModalOpen(true);
+    } else {
+      setPaymentMethod('cash');
+      setPaidAmount(netAmount);
+      setPaidAmountRaw(netAmount.toString());
+      if (!selectedCustomerId && (!customCustomerName.trim() || customCustomerName === 'عميل آجل')) {
+        setCustomCustomerName('عميل نقدي');
+      }
+    }
+  };
+
+  const handleSelectCustomerFromModal = (customer: Customer | null) => {
+    if (customer) {
+      setSelectedCustomerId(customer.id);
+      setCustomCustomerName(customer.name);
+      setCustomerPhone(customer.phone || '');
+      setCustomerDealType('credit');
+      setPaymentMethod('credit');
+      setPaidAmount(0);
+      setPaidAmountRaw('');
+    } else {
+      // Switched to direct cash sale
+      setSelectedCustomerId('');
+      setCustomCustomerName('عميل نقدي');
+      setCustomerPhone('');
+      setCustomerDealType('cash');
+      setPaymentMethod('cash');
+      setPaidAmount(netAmount);
+      setPaidAmountRaw(netAmount.toString());
+    }
+    setCustomerSearchInitialQuery('');
+    setIsCustomerSelectModalOpen(false);
+  };
+
+  useEffect(() => {
+    if (initialCustomerId) {
+      const targetCustomer = customers.find(c => c.id === initialCustomerId);
+      if (targetCustomer) {
+        setSelectedCustomerId(targetCustomer.id);
+        setCustomCustomerName(targetCustomer.name);
+        setCustomerPhone(targetCustomer.phone || '');
+        setCustomerDealType('credit');
+        setPaymentMethod('credit');
+        setPaidAmount(0);
+        setPaidAmountRaw('0');
+        setCartItems([]);
+        setDiscount(0);
+        setNotes('');
+        setInvoiceDate(new Date().toISOString().slice(0, 16));
+        setSaleStep(2);
+        setStep2SubView('search');
+        setIsBigSearchOpen(false);
+        setIsNewSaleModalOpen(true);
+        setReturnToCustomersAfterSale(true);
+      }
+    }
+  }, [initialCustomerId, customers]);
 
   const openNewSale = () => {
     setSelectedCustomerId('');
+    setCustomerDealType('cash');
     setCustomCustomerName('عميل نقدي');
     setCustomerPhone('');
     setInvoiceDate(new Date().toISOString().slice(0, 16));
@@ -111,14 +193,23 @@ export const SalesTab: React.FC<SalesTabProps> = ({
     setDiscount(0);
     setPaymentMethod('cash');
     setPaidAmount(0);
+    setPaidAmountRaw('0');
     setNotes('');
     setSaleStep(1);
     setStep2SubView('search');
     setIsBigSearchOpen(false);
     setIsNewSaleModalOpen(true);
+    setFormError('');
   };
 
   const handleProceedToItems = () => {
+    setFormError('');
+    if (customerDealType === 'credit') {
+      if (!customCustomerName.trim() || customCustomerName.trim() === 'عميل نقدي') {
+        setFormError('يرجى تحديد أو كتابة اسم العميل الآجل لتسجيل الدين على حسابه');
+        return;
+      }
+    }
     setSaleStep(2);
     setStep2SubView('search'); // Show search frame alone
     setIsBigSearchOpen(false);
@@ -140,8 +231,13 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   const handleCustomerSelect = (custId: string) => {
     setSelectedCustomerId(custId);
     if (!custId) {
-      setCustomCustomerName('عميل نقدي');
-      setCustomerPhone('');
+      if (customerDealType === 'credit') {
+        setCustomCustomerName('');
+        setCustomerPhone('');
+      } else {
+        setCustomCustomerName('عميل نقدي');
+        setCustomerPhone('');
+      }
     } else {
       const cust = customers.find(c => c.id === custId);
       if (cust) {
@@ -374,15 +470,41 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   const netAmount = Math.max(0, subtotal - discount);
   const totalProfit = Math.max(0, netAmount - totalCost);
 
+  const focusPaidAmountInput = () => {
+    setTimeout(() => {
+      if (paidAmountInputRef.current) {
+        paidAmountInputRef.current.focus();
+        paidAmountInputRef.current.select();
+        try {
+          paidAmountInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } catch {
+          // ignore
+        }
+      }
+    }, 70);
+  };
+
   // Auto adjust paid amount if payment method is cash / card / transfer
   const handlePaymentMethodChange = (method: 'cash' | 'card' | 'transfer' | 'credit') => {
     setPaymentMethod(method);
     if (method === 'credit') {
+      setCustomerDealType('credit');
       setPaidAmount(0);
+      setPaidAmountRaw('');
+      focusPaidAmountInput();
     } else {
+      setCustomerDealType('cash');
       setPaidAmount(netAmount);
+      setPaidAmountRaw(netAmount.toString());
     }
   };
+
+  useEffect(() => {
+    if (paymentMethod !== 'credit') {
+      setPaidAmount(netAmount);
+      setPaidAmountRaw(netAmount.toString());
+    }
+  }, [netAmount, paymentMethod]);
 
   const handleSaveSaleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -433,6 +555,11 @@ export const SalesTab: React.FC<SalesTabProps> = ({
 
     // Open invoice preview
     onOpenInvoiceModal(newInvoice);
+
+    // Return to customers window if initiated from customer card or requested
+    if (returnToCustomersAfterSale && onReturnToCustomers) {
+      onReturnToCustomers();
+    }
   };
 
   // Filter sales invoices (by customer, invoice number, item name, or amount/price)
@@ -470,13 +597,26 @@ export const SalesTab: React.FC<SalesTabProps> = ({
           )}
         </div>
 
+        {onReturnToCustomers && (
+          <button
+            type="button"
+            onClick={onReturnToCustomers}
+            className="bg-slate-800 hover:bg-slate-750 text-emerald-300 border border-emerald-500/30 font-bold text-xs sm:text-sm px-3 py-2.5 rounded-xl flex items-center gap-1.5 shrink-0 active:scale-95 transition-all shadow-xs"
+            title="الرجوع لنافذة العملاء والشركاء"
+          >
+            <ArrowRight className="w-4 h-4 text-emerald-400" />
+            <span className="hidden sm:inline">نافذة العملاء</span>
+            <span className="sm:hidden">العملاء</span>
+          </button>
+        )}
+
         <button
           id="new-sale-invoice-btn"
           onClick={openNewSale}
           className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 shrink-0 active:scale-95 transition-all"
         >
           <Plus className="w-4 h-4" />
-          <span>فاتورة بيع</span>
+          <span>فاتورة جديدة</span>
         </button>
       </div>
 
@@ -624,14 +764,30 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsNewSaleModalOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-750 transition-colors"
-                title="إغلاق"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                {onReturnToCustomers && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsNewSaleModalOpen(false);
+                      onReturnToCustomers();
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold transition-all active:scale-95 shadow-xs"
+                    title="الرجوع لنافذة العملاء"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>الرجوع للعملاء</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsNewSaleModalOpen(false)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-750 transition-colors"
+                  title="إغلاق"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Step Tracker Tabs */}
@@ -670,60 +826,163 @@ export const SalesTab: React.FC<SalesTabProps> = ({
             <form onSubmit={handleSaveSaleSubmit} className="space-y-3 text-xs">
               {/* STEP 1: Customer & Date Frame ALONE (Fits completely on screen without scrolling) */}
               {saleStep === 1 && (
-                <div className="bg-slate-850 p-3 sm:p-4 rounded-2xl border border-slate-750 shadow-xl space-y-2.5 animate-in fade-in duration-200">
+                <div className="bg-slate-850 p-3 sm:p-4 rounded-2xl border border-slate-750 shadow-xl space-y-3 animate-in fade-in duration-200">
                   {/* Frame Header */}
-                  <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                        <User className="w-3.5 h-3.5" />
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                        customerDealType === 'credit'
+                          ? 'bg-amber-500/20 text-amber-400'
+                          : 'bg-emerald-500/20 text-emerald-400'
+                      }`}>
+                        <User className="w-4 h-4" />
                       </div>
-                      <h4 className="font-extrabold text-slate-100 text-xs sm:text-sm">بيانات العميل والفاتورة</h4>
+                      <div>
+                        <h4 className="font-extrabold text-slate-100 text-xs sm:text-sm">بيانات العميل والفاتورة</h4>
+                        <p className="text-[10px] text-slate-400">حدد نوع التعامل مع العميل وتاريخ البيع</p>
+                      </div>
                     </div>
-                    <span className="text-[9.5px] sm:text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-lg">
-                      الخطوة 1 من 2
+                    <span className={`text-[9.5px] sm:text-[10.5px] font-black px-2.5 py-1 rounded-lg border ${
+                      customerDealType === 'credit'
+                        ? 'text-amber-400 bg-amber-500/15 border-amber-500/35'
+                        : 'text-emerald-400 bg-emerald-500/15 border-emerald-500/35'
+                    }`}>
+                      {customerDealType === 'credit' ? '⏳ عميل آجل (ذمم)' : '💵 عميل نقدي (كاش)'}
                     </span>
                   </div>
 
-                  {/* 4 Fields Grid: 2 Columns on ALL screens (including mobile) to eliminate vertical scrolling */}
-                  <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-                    {/* 1. اسم العميل (قائمة العملاء) */}
-                    <div>
-                      <label className="block text-[10.5px] sm:text-[11px] text-slate-300 font-bold mb-1 flex items-center gap-1 truncate">
-                        <User className="w-3 h-3 text-emerald-400 shrink-0" />
-                        <span className="truncate">اسم العميل</span>
+                  {/* Customer Deal Type Switcher: Cash vs Credit */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] sm:text-xs font-black text-slate-200 flex items-center gap-1.5">
+                        <span>نوع التعامل مع العميل:</span>
                       </label>
-                      <select
-                        value={selectedCustomerId}
-                        onChange={(e) => handleCustomerSelect(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 sm:py-2 text-white font-medium focus:outline-none focus:border-emerald-500 text-xs truncate"
-                      >
-                        <option value="">عميل نقدي مباشر</option>
-                        {customers.map(c => (
-                          <option key={c.id} value={c.id}>{c.name} ({c.phone || 'بدون هاتف'})</option>
-                        ))}
-                      </select>
+                      <span className="text-[10px] text-slate-400">
+                        {customerDealType === 'credit' ? 'سيتم تسجيل الفاتورة بالآجل' : 'الدفع فوري وكامل'}
+                      </span>
                     </div>
 
-                    {/* 2. اسم العميل النقدي */}
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-900 rounded-xl border border-slate-750">
+                      <button
+                        type="button"
+                        onClick={() => handleCustomerDealTypeChange('cash')}
+                        className={`py-2 px-2.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          customerDealType === 'cash'
+                            ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950/50 ring-2 ring-emerald-400/50'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-emerald-300"></span>
+                        <span>💵 عميل نقدي (كاش)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCustomerDealTypeChange('credit')}
+                        className={`py-2 px-2.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          customerDealType === 'credit'
+                            ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-950/50 ring-2 ring-amber-400/60'
+                            : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10'
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                        <span>⏳ عميل آجل (ذمم)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4 Fields Grid: 2 Columns on ALL screens (including mobile) to eliminate vertical scrolling */}
+                  <div className="grid grid-cols-2 gap-2 sm:gap-2.5 pt-1">
+                    {/* 1. اسم العميل (زر فتح نافذة البحث المتطورة) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10.5px] sm:text-[11px] text-slate-300 font-bold flex items-center gap-1 truncate">
+                          <User className={`w-3 h-3 shrink-0 ${customerDealType === 'credit' ? 'text-amber-400' : 'text-emerald-400'}`} />
+                          <span className="truncate">
+                            {customerDealType === 'credit' ? 'العميل الآجل المسجل' : 'اسم العميل'}
+                          </span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomerSearchInitialQuery(selectedCustomerId ? '' : (customCustomerName !== 'عميل نقدي' ? customCustomerName : ''));
+                            setIsCustomerSelectModalOpen(true);
+                          }}
+                          className="text-[9.5px] sm:text-[10px] text-amber-400 hover:text-amber-300 font-black underline flex items-center gap-0.5 cursor-pointer shrink-0"
+                        >
+                          <Search className="w-2.5 h-2.5" />
+                          <span>بحث متطور</span>
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerSearchInitialQuery(selectedCustomerId ? '' : (customCustomerName !== 'عميل نقدي' ? customCustomerName : ''));
+                          setIsCustomerSelectModalOpen(true);
+                        }}
+                        className={`w-full border rounded-xl px-2.5 py-1.5 sm:py-2 text-right transition-all flex items-center justify-between cursor-pointer group shadow-sm text-xs truncate ${
+                          customerDealType === 'credit'
+                            ? 'bg-amber-500/10 border-amber-500/50 hover:border-amber-400 text-amber-200'
+                            : 'bg-slate-900 border-slate-700 hover:border-emerald-500 text-slate-200'
+                        }`}
+                        title="انقر لفتح نافذة العملاء على كامل الشاشة والبحث الذكي حتى بجزء من الكلمة"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
+                          <Search className={`w-3.5 h-3.5 shrink-0 ${customerDealType === 'credit' ? 'text-amber-400' : 'text-slate-400'}`} />
+                          <span className="font-bold truncate">
+                            {selectedCustomerId
+                              ? (customers.find(c => c.id === selectedCustomerId)?.name || customCustomerName)
+                              : (customerDealType === 'credit' ? '🔍 انقر لاختيار العميل بالبحث...' : 'عميل نقدي مباشر')}
+                          </span>
+                        </div>
+                        <span className={`text-[9.5px] font-black px-2 py-0.5 rounded-lg shrink-0 mr-1 ${
+                          customerDealType === 'credit'
+                            ? 'bg-amber-500 text-slate-950 shadow-xs'
+                            : 'bg-slate-800 text-slate-300'
+                        }`}>
+                          تغيير
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* 2. اسم العميل النقدي / الآجل */}
                     <div>
                       <label className="block text-[10.5px] sm:text-[11px] text-slate-300 font-bold mb-1 flex items-center gap-1 truncate">
-                        <UserCheck className="w-3 h-3 text-emerald-400 shrink-0" />
-                        <span className="truncate">اسم العميل النقدي</span>
+                        <UserCheck className={`w-3 h-3 shrink-0 ${customerDealType === 'credit' ? 'text-amber-400' : 'text-emerald-400'}`} />
+                        <span className="truncate">
+                          {customerDealType === 'credit' ? 'اسم العميل الآجل (لتسجيل الدين)' : 'اسم العميل النقدي'}
+                        </span>
                       </label>
                       <input
                         type="text"
                         value={customCustomerName}
-                        onChange={(e) => setCustomCustomerName(e.target.value)}
-                        placeholder="عميل نقدي"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 sm:py-2 text-white text-xs focus:outline-none focus:border-emerald-500"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomCustomerName(val);
+                          if (val.trim().length > 0) {
+                            setCustomerSearchInitialQuery(val);
+                            setIsCustomerSelectModalOpen(true);
+                            // تنزيل كيبورد الهاتف فوراً لتظهر قائمة العملاء على كامل الشاشة
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                        placeholder={customerDealType === 'credit' ? 'اكتب بالعربية أو الفرنسية (مثل: ادم، lahar)...' : 'عميل نقدي'}
+                        className={`w-full bg-slate-900 border rounded-xl px-2.5 py-1.5 sm:py-2 text-xs focus:outline-none ${
+                          customerDealType === 'credit'
+                            ? 'border-amber-500/50 text-amber-200 focus:border-amber-400 font-bold placeholder-amber-400/40'
+                            : 'border-slate-700 text-white focus:border-emerald-500'
+                        }`}
                       />
                     </div>
 
                     {/* 3. رقم الهاتف */}
                     <div>
                       <label className="block text-[10.5px] sm:text-[11px] text-slate-300 font-bold mb-1 flex items-center gap-1 truncate">
-                        <Phone className="w-3 h-3 text-emerald-400 shrink-0" />
-                        <span className="truncate">رقم الهاتف</span>
+                        <Phone className={`w-3 h-3 shrink-0 ${customerDealType === 'credit' ? 'text-amber-400' : 'text-emerald-400'}`} />
+                        <span className="truncate">
+                          {customerDealType === 'credit' ? 'رقم هاتف العميل (للتواصل)' : 'رقم الهاتف'}
+                        </span>
                       </label>
                       <input
                         type="tel"
@@ -749,8 +1008,55 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                     </div>
                   </div>
 
+                  {/* Informative Credit Notice / Debt Status */}
+                  {customerDealType === 'credit' && (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 text-xs text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 animate-pulse"></span>
+                        <span className="text-[11.5px] font-bold text-amber-300">
+                          {selectedCustomerId 
+                            ? `سيتم قيد مديونية الفاتورة بحساب: ${customCustomerName}` 
+                            : 'سيتم فتح وتتبع حساب دين باسم العميل المدخل.'}
+                        </span>
+                      </div>
+                      {selectedCustomerId && (() => {
+                        const curCust = customers.find(c => c.id === selectedCustomerId);
+                        if (!curCust) return null;
+                        return (
+                          <div className="text-[11px] font-mono font-bold bg-amber-500/15 border border-amber-500/25 px-2 py-1 rounded-lg shrink-0 flex items-center gap-1">
+                            <span className="text-slate-300">الدين السابق:</span>
+                            <span className={curCust.balance > 0 ? 'text-amber-300' : 'text-emerald-400'}>
+                              {formatCurrency(curCust.balance, currency)}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Form Error in Step 1 if any */}
+                  {formError && (
+                    <div className="p-2.5 bg-rose-500/15 border border-rose-500/35 text-rose-300 rounded-xl text-xs font-bold text-center">
+                      ⚠️ {formError}
+                    </div>
+                  )}
+
                   {/* Complete Button in ONE horizontal row on mobile */}
-                  <div className="pt-1.5 flex items-center gap-2">
+                  <div className="pt-1 flex items-center gap-2 flex-wrap">
+                    {onReturnToCustomers && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsNewSaleModalOpen(false);
+                          onReturnToCustomers();
+                        }}
+                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-emerald-300 border border-emerald-500/30 font-bold text-xs flex items-center gap-1 transition-colors shrink-0 cursor-pointer"
+                        title="الرجوع لنافذة العملاء"
+                      >
+                        <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>نافذة العملاء</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setIsNewSaleModalOpen(false)}
@@ -761,11 +1067,15 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                     <button
                       type="button"
                       onClick={handleProceedToItems}
-                      className="flex-1 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] text-white font-extrabold py-2 px-3 sm:py-2.5 sm:px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/30 border border-emerald-500/40 transition-all group cursor-pointer"
+                      className={`flex-1 active:scale-[0.99] text-white font-extrabold py-2 px-3 sm:py-2.5 sm:px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg transition-all group cursor-pointer ${
+                        customerDealType === 'credit'
+                          ? 'bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black shadow-amber-600/30 border border-amber-400/50'
+                          : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-600/30 border border-emerald-500/40'
+                      }`}
                     >
-                      <CheckCircle2 className="w-4 h-4 text-emerald-200 group-hover:scale-110 transition-transform shrink-0" />
+                      <CheckCircle2 className={`w-4 h-4 group-hover:scale-110 transition-transform shrink-0 ${customerDealType === 'credit' ? 'text-slate-950' : 'text-emerald-200'}`} />
                       <span className="truncate">أتمم البيانات وانتقل لإضافة الأصناف</span>
-                      <ArrowLeft className="w-3.5 h-3.5 text-emerald-200 group-hover:-translate-x-1 transition-transform shrink-0" />
+                      <ArrowLeft className={`w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform shrink-0 ${customerDealType === 'credit' ? 'text-slate-950' : 'text-emerald-200'}`} />
                     </button>
                   </div>
                 </div>
@@ -784,6 +1094,13 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-white text-xs sm:text-sm">
                             {customCustomerName || (selectedCustomerId ? customers.find(c => c.id === selectedCustomerId)?.name : 'عميل نقدي')}
+                          </span>
+                          <span className={`text-[9.5px] font-black px-2 py-0.5 rounded-md border ${
+                            customerDealType === 'credit'
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/35'
+                              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/35'
+                          }`}>
+                            {customerDealType === 'credit' ? '⏳ عميل آجل (ذمم)' : '💵 عميل نقدي'}
                           </span>
                           {customerPhone && (
                             <span className="text-[10.5px] sm:text-[11px] text-slate-300 font-mono bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700">
@@ -1204,25 +1521,189 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-bold text-xs sm:text-sm"
                             >
                               <option value="cash">نقداً (كاش)</option>
+                              <option value="credit">آجل (ذمم للعميل)</option>
                               <option value="card">شبكة / مدى / بطاقة</option>
                               <option value="transfer">تحويل بنكي</option>
-                              <option value="credit">آجل (ذمم للعميل)</option>
                             </select>
                           </div>
                         </div>
 
-                        {/* Paid Amount (if not pure cash) */}
+                        {/* Quick Payment Method Selector Buttons */}
+                        <div className="grid grid-cols-4 gap-1.5 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handlePaymentMethodChange('cash')}
+                            className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
+                              paymentMethod === 'cash'
+                                ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                                : 'bg-slate-900 text-slate-300 border-slate-750 hover:bg-slate-800'
+                            }`}
+                          >
+                            نقداً
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePaymentMethodChange('credit')}
+                            className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center flex items-center justify-center gap-1 ${
+                              paymentMethod === 'credit'
+                                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md font-black ring-2 ring-amber-400/40'
+                                : 'bg-slate-900 text-amber-300 border-amber-500/40 hover:bg-amber-500/15'
+                            }`}
+                          >
+                            <span>آجل</span>
+                            <span className={`w-1.5 h-1.5 rounded-full ${paymentMethod === 'credit' ? 'bg-slate-950' : 'bg-amber-400'}`}></span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePaymentMethodChange('card')}
+                            className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
+                              paymentMethod === 'card'
+                                ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                                : 'bg-slate-900 text-slate-300 border-slate-750 hover:bg-slate-800'
+                            }`}
+                          >
+                            بطاقة
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePaymentMethodChange('transfer')}
+                            className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
+                              paymentMethod === 'transfer'
+                                ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
+                                : 'bg-slate-900 text-slate-300 border-slate-750 hover:bg-slate-800'
+                            }`}
+                          >
+                            تحويل
+                          </button>
+                        </div>
+
+                        {/* Paid Amount for Credit (Immediately ready to enter without fighting 0) */}
                         {paymentMethod === 'credit' && (
-                          <div>
-                            <label className="block text-amber-300 font-semibold mb-1 text-xs">المبلغ المدفوع مقدماً</label>
-                            <input
-                              type="number"
-                              min="0"
-                              max={netAmount}
-                              value={paidAmount}
-                              onChange={(e) => setPaidAmount(Math.max(0, parseFloat(e.target.value) || 0))}
-                              className="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-2.5 py-1.5 text-amber-300 font-bold text-xs sm:text-sm"
-                            />
+                          <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-2xl p-3 space-y-2.5 animate-in fade-in duration-200">
+                            <div className="flex items-center justify-between">
+                              <label className="block text-amber-300 font-black text-xs sm:text-sm flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                                <span>المبلغ المدفوع مقدماً (العربون / الدفعة)</span>
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10.5px] text-amber-300/80 font-medium">
+                                  {paidAmount === 0 ? 'آجل بالكامل (0)' : `${formatCurrency(paidAmount, currency)} مدفوع`}
+                                </span>
+                                {paidAmount > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPaidAmount(0);
+                                      setPaidAmountRaw('');
+                                      focusPaidAmountInput();
+                                    }}
+                                    className="text-[10px] text-rose-400 hover:text-rose-300 underline cursor-pointer"
+                                  >
+                                    مسح
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="relative">
+                              <input
+                                ref={paidAmountInputRef}
+                                type="number"
+                                inputMode="decimal"
+                                min="0"
+                                max={netAmount}
+                                step="any"
+                                placeholder="0.00"
+                                value={paidAmountRaw}
+                                autoFocus
+                                onFocus={(e) => {
+                                  e.target.select();
+                                }}
+                                onClick={(e) => {
+                                  (e.target as HTMLInputElement).select();
+                                }}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setPaidAmountRaw(val);
+                                  const parsed = parseFloat(val);
+                                  setPaidAmount(isNaN(parsed) ? 0 : Math.max(0, Math.min(netAmount, parsed)));
+                                }}
+                                onBlur={() => {
+                                  if (!paidAmountRaw.trim() || isNaN(parseFloat(paidAmountRaw))) {
+                                    setPaidAmount(0);
+                                    setPaidAmountRaw('0');
+                                  } else {
+                                    const num = Math.max(0, Math.min(netAmount, parseFloat(paidAmountRaw)));
+                                    setPaidAmount(num);
+                                    setPaidAmountRaw(num.toString());
+                                  }
+                                }}
+                                className="w-full bg-slate-900 border-2 border-amber-400/80 rounded-xl pr-3 pl-20 py-2 text-amber-300 font-black text-base sm:text-lg focus:outline-none focus:ring-2 focus:ring-amber-400 shadow-inner"
+                              />
+                              <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+                                <span className="text-xs font-black text-amber-400/90 font-mono">
+                                  {currency}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Quick Shortcuts */}
+                            <div className="flex items-center gap-1.5 pt-0.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPaidAmount(0);
+                                  setPaidAmountRaw('0');
+                                  focusPaidAmountInput();
+                                }}
+                                className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer text-center ${
+                                  paidAmount === 0
+                                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                                    : 'bg-slate-900 text-amber-300/90 border-amber-500/30 hover:bg-amber-500/20'
+                                }`}
+                              >
+                                0 (آجل بالكامل)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const half = Math.round((netAmount / 2) * 100) / 100;
+                                  setPaidAmount(half);
+                                  setPaidAmountRaw(half.toString());
+                                  focusPaidAmountInput();
+                                }}
+                                className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer text-center ${
+                                  paidAmount === Math.round((netAmount / 2) * 100) / 100 && paidAmount > 0
+                                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                                    : 'bg-slate-900 text-amber-300/90 border-amber-500/30 hover:bg-amber-500/20'
+                                }`}
+                              >
+                                نصف المبلغ (50%)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPaidAmount(netAmount);
+                                  setPaidAmountRaw(netAmount.toString());
+                                  focusPaidAmountInput();
+                                }}
+                                className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer text-center ${
+                                  paidAmount === netAmount && netAmount > 0
+                                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                                    : 'bg-slate-900 text-amber-300/90 border-amber-500/30 hover:bg-amber-500/20'
+                                }`}
+                              >
+                                كامل المبلغ
+                              </button>
+                            </div>
+
+                            {/* Remaining Credit Notice */}
+                            <div className="flex items-center justify-between text-xs pt-1 px-1 border-t border-amber-500/20 font-semibold">
+                              <span className="text-slate-400">المتبقي دَيْن بذمة العميل:</span>
+                              <span className="text-amber-400 font-black text-sm font-mono">
+                                {formatCurrency(Math.max(0, netAmount - paidAmount), currency)}
+                              </span>
+                            </div>
                           </div>
                         )}
 
@@ -1261,6 +1742,21 @@ export const SalesTab: React.FC<SalesTabProps> = ({
                         />
                       </div>
 
+                      {/* Checkbox for returning to customers after save */}
+                      {onReturnToCustomers && (
+                        <label className="flex items-center gap-2 p-2 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer hover:bg-slate-850 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={returnToCustomersAfterSale}
+                            onChange={(e) => setReturnToCustomersAfterSale(e.target.checked)}
+                            className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500 bg-slate-800 w-4 h-4 cursor-pointer"
+                          />
+                          <span className="text-xs text-slate-300 font-semibold select-none">
+                            الرجوع لنافذة العملاء والشركاء فور حفظ هذه الفاتورة
+                          </span>
+                        </label>
+                      )}
+
                       {formError && (
                         <div className="bg-rose-500/15 border border-rose-500/30 text-rose-300 px-3 py-2 rounded-xl text-xs font-bold text-center">
                           ⚠️ {formError}
@@ -1269,14 +1765,30 @@ export const SalesTab: React.FC<SalesTabProps> = ({
 
                       {/* Action Buttons */}
                       <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-slate-800">
-                        <button
-                          type="button"
-                          onClick={() => setSaleStep(1)}
-                          className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 font-semibold flex items-center justify-center gap-1.5 text-xs order-2 sm:order-1 cursor-pointer"
-                        >
-                          <ArrowRight className="w-4 h-4" />
-                          <span>رجوع لبيانات العميل</span>
-                        </button>
+                        <div className="w-full sm:w-auto flex items-center gap-2 order-2 sm:order-1">
+                          <button
+                            type="button"
+                            onClick={() => setSaleStep(1)}
+                            className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 font-semibold flex items-center justify-center gap-1.5 text-xs cursor-pointer"
+                          >
+                            <ArrowRight className="w-4 h-4" />
+                            <span>بيانات العميل</span>
+                          </button>
+                          {onReturnToCustomers && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsNewSaleModalOpen(false);
+                                onReturnToCustomers();
+                              }}
+                              className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-emerald-300 border border-emerald-500/30 font-bold flex items-center justify-center gap-1 text-xs cursor-pointer shadow-xs"
+                              title="الرجوع لنافذة العملاء"
+                            >
+                              <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>نافذة العملاء</span>
+                            </button>
+                          )}
+                        </div>
                         <div className="w-full sm:w-auto flex items-center justify-end gap-2 order-1 sm:order-2">
                           <button
                             type="button"
@@ -1409,6 +1921,18 @@ export const SalesTab: React.FC<SalesTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* Advanced Customer Select Modal with partial word search */}
+      <CustomerSelectModal
+        isOpen={isCustomerSelectModalOpen}
+        onClose={() => setIsCustomerSelectModalOpen(false)}
+        customers={customers}
+        selectedCustomerId={selectedCustomerId}
+        onSelectCustomer={handleSelectCustomerFromModal}
+        onQuickAddCustomer={onQuickAddCustomer}
+        currency={currency}
+        initialQuery={customerSearchInitialQuery}
+      />
     </div>
   );
 };

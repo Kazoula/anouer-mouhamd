@@ -622,7 +622,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                 key={product.id}
                 className={`bg-slate-850 border rounded-2xl p-3.5 transition-all shadow-md ${
                   isLowStock
-                    ? 'border-amber-500/50 bg-gradient-to-br from-slate-850 via-slate-850 to-amber-950/20'
+                    ? 'border-red-500/50 bg-gradient-to-br from-slate-850 via-slate-850 to-red-950/25 dark:from-black dark:via-zinc-950 dark:to-red-950/30'
                     : 'border-slate-800 hover:border-slate-700'
                 }`}
               >
@@ -634,8 +634,8 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                         <HighlightedProductName name={product.name} query={searchQuery} />
                       </h3>
                       {isLowStock && (
-                        <span className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" />
+                        <span className="bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/40 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+                          <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
                           <span>منخفض ({product.stockPieces} {isDual ? product.minorUnit : primaryUnit})</span>
                         </span>
                       )}
@@ -724,7 +724,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                           {product.minorUnit} • {product.middleUnit} ({product.piecesPerMiddleUnit}) • {product.majorUnit} ({product.piecesPerMajorUnit})
                         </div>
                         <span className="text-xs font-medium text-slate-400 dark:text-slate-400 block mt-0.5">
-                          حد التنبيه: <strong className="text-amber-400 font-bold">{product.minStockAlert}</strong> {product.minorUnit}
+                          حد التنبيه: <strong className={isLowStock ? "text-red-500 dark:text-red-400 font-black" : "text-slate-300 dark:text-slate-300 font-bold"}>{product.minStockAlert}</strong> {product.minorUnit}
                         </span>
                       </>
                     ) : isDual ? (
@@ -734,7 +734,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                           1 {product.majorUnit} = <span className="text-emerald-400 font-extrabold">{product.piecesPerMajorUnit}</span> {product.minorUnit}
                         </div>
                         <span className="text-xs font-medium text-slate-400 dark:text-slate-400 block mt-0.5">
-                          حد التنبيه: <strong className="text-amber-400 font-bold">{product.minStockAlert}</strong> {product.minorUnit}
+                          حد التنبيه: <strong className={isLowStock ? "text-red-500 dark:text-red-400 font-black" : "text-slate-300 dark:text-slate-300 font-bold"}>{product.minStockAlert}</strong> {product.minorUnit}
                         </span>
                       </>
                     ) : (
@@ -747,7 +747,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                           </span>
                         </div>
                         <span className="text-xs font-medium text-slate-400 dark:text-slate-400 block mt-0.5">
-                          حد التنبيه: <strong className="text-amber-400 font-bold">{product.minStockAlert}</strong> {primaryUnit}
+                          حد التنبيه: <strong className={isLowStock ? "text-red-500 dark:text-red-400 font-black" : "text-slate-300 dark:text-slate-300 font-bold"}>{product.minStockAlert}</strong> {primaryUnit}
                         </span>
                       </>
                     )}
