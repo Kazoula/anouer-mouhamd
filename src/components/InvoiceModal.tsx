@@ -122,9 +122,10 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
+              className="close-circle-btn"
+              title="إغلاق"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>

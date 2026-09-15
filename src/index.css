@@ -55,6 +55,48 @@
 }
 
 /* =========================================================
+   CIRCULAR CLOSE BUTTON WITH TRANSPARENT CIRCLE ON HOVER
+   ========================================================= */
+.close-circle-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background-color: transparent;
+  color: #94a3b8;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  flex-shrink: 0;
+  outline: none;
+}
+
+.close-circle-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.close-circle-btn:active {
+  transform: scale(0.92);
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+html.light .close-circle-btn {
+  color: #64748b;
+  background-color: transparent;
+}
+
+html.light .close-circle-btn:hover {
+  background-color: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+}
+
+html.light .close-circle-btn:active {
+  background-color: rgba(15, 23, 42, 0.15);
+}
+
+/* =========================================================
    CRYSTAL GLASS & TRANSPARENT ICON SYSTEM
    ========================================================= */
 .crystal-glass {

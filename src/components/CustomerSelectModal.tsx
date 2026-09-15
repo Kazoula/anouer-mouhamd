@@ -278,7 +278,7 @@ export const CustomerSelectModal: React.FC<CustomerSelectModalProps> = ({
 
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-750 transition-colors cursor-pointer"
+              className="close-circle-btn"
               title="إغلاق"
             >
               <X className="w-5 h-5" />

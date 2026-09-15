@@ -142,7 +142,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
             id="close-cloud-sync-modal-btn"
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="close-circle-btn"
+            title="إغلاق"
           >
             <X className="w-5 h-5" />
           </button>

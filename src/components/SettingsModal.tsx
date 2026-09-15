@@ -90,11 +90,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             id="close-settings-modal-top-btn"
             onClick={onClose}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold transition-all active:scale-95"
+            className="close-circle-btn"
             title="إغلاق"
           >
-            <X className="w-4 h-4 text-slate-400" />
-            <span>إغلاق</span>
+            <X className="w-5 h-5" />
           </button>
         </div>
 

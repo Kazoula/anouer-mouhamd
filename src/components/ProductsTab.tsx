@@ -917,7 +917,8 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
               </div>
               <button
                 onClick={() => setIsEditModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="close-circle-btn"
+                title="إغلاق"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1327,7 +1328,8 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
               </div>
               <button
                 onClick={() => setIsAdjustModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="close-circle-btn"
+                title="إغلاق"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1483,7 +1485,8 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
               </div>
               <button
                 onClick={() => setIsHistoryModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="close-circle-btn"
+                title="إغلاق"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1739,7 +1742,8 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
               </div>
               <button
                 onClick={() => setQuickCategoryProduct(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="close-circle-btn"
+                title="إغلاق"
               >
                 <X className="w-5 h-5" />
               </button>

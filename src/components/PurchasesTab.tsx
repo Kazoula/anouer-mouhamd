@@ -518,7 +518,8 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
               </div>
               <button
                 onClick={() => setIsNewPurchaseModalOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-750 transition-colors"
+                className="close-circle-btn"
+                title="إغلاق"
               >
                 <X className="w-5 h-5" />
               </button>

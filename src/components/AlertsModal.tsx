@@ -52,7 +52,8 @@ export const AlertsModal: React.FC<AlertsModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-slate-800 cursor-pointer"
+            className="close-circle-btn"
+            title="إغلاق"
           >
             <X className="w-5 h-5" />
           </button>

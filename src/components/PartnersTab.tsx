@@ -868,7 +868,8 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
               </div>
               <button
                 onClick={() => setIsSupplierModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="close-circle-btn"
+                title="إغلاق"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1013,7 +1014,8 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
               </div>
               <button
                 onClick={() => setIsCustomerModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="close-circle-btn"
+                title="إغلاق"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1149,7 +1151,8 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
               </div>
               <button
                 onClick={() => setStatementPartner(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="close-circle-btn"
+                title="إغلاق"
               >
                 <X className="w-5 h-5" />
               </button>

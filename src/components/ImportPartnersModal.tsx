@@ -630,7 +630,8 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-700 transition-all"
+            className="close-circle-btn"
+            title="إغلاق"
           >
             <X className="w-5 h-5" />
           </button>
