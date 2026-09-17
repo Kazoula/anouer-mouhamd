@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   * {
@@ -94,6 +95,51 @@ html.light .close-circle-btn:hover {
 
 html.light .close-circle-btn:active {
   background-color: rgba(15, 23, 42, 0.15);
+}
+
+/* =========================================================
+   LOW STOCK BANNER TYPOGRAPHY (WHITE IN DARK, BLACK IN LIGHT)
+   ========================================================= */
+.stock-alert-title {
+  color: #ffffff !important;
+}
+
+.stock-alert-desc {
+  color: #f1f5f9 !important;
+}
+
+.stock-alert-action {
+  color: #ffffff !important;
+}
+
+html.dark .stock-alert-title,
+.dark .stock-alert-title {
+  color: #ffffff !important;
+}
+
+html.dark .stock-alert-desc,
+.dark .stock-alert-desc {
+  color: #f1f5f9 !important;
+}
+
+html.dark .stock-alert-action,
+.dark .stock-alert-action {
+  color: #ffffff !important;
+}
+
+html.light .stock-alert-title,
+.light .stock-alert-title {
+  color: #000000 !important;
+}
+
+html.light .stock-alert-desc,
+.light .stock-alert-desc {
+  color: #000000 !important;
+}
+
+html.light .stock-alert-action,
+.light .stock-alert-action {
+  color: #000000 !important;
 }
 
 /* =========================================================
@@ -311,6 +357,14 @@ html.light [class*="border-slate-700"] {
 }
 
 /* Light Mode Text High Contrast */
+html.light .text-slate-950,
+html.light [class*="text-slate-950"],
+html.light .text-slate-900,
+html.light [class*="text-slate-900"],
+html.light .text-black {
+  color: #020617 !important;
+}
+
 html.light .text-white,
 html.light [class*="text-white"]:not(.keep-white) {
   color: #0f172a !important;
@@ -345,26 +399,28 @@ html.light [class*="text-slate-500"] {
 html.light .keep-white,
 html.light .keep-white *,
 html.light [class*="keep-white"],
-html.light [class*="from-red-"],
-html.light [class*="from-red-"] *,
-html.light [class*="from-rose-"],
-html.light [class*="from-rose-"] *,
-html.light .bg-red-600,
-html.light .bg-red-600 *,
-html.light .bg-red-500,
-html.light .bg-red-500 *,
-html.light .bg-emerald-600,
-html.light .bg-emerald-500,
-html.light .bg-blue-600,
-html.light .bg-blue-500,
-html.light .bg-rose-600,
-html.light .bg-rose-500,
-html.light .bg-amber-600,
-html.light .bg-purple-600,
-html.light .bg-purple-700,
-html.light .bg-indigo-600,
-html.light .bg-violet-600,
-html.light .bg-teal-600 {
+html.light [class*="keep-white"] *,
+html.light button[class*="bg-red-"],
+html.light button[class*="bg-emerald-"],
+html.light button[class*="bg-blue-"],
+html.light button[class*="bg-purple-"],
+html.light button[class*="bg-indigo-"],
+html.light button[class*="bg-rose-"],
+html.light button[class*="bg-amber-"],
+html.light .bg-red-600.text-white,
+html.light .bg-red-500.text-white,
+html.light .bg-emerald-600.text-white,
+html.light .bg-emerald-500.text-white,
+html.light .bg-blue-600.text-white,
+html.light .bg-blue-500.text-white,
+html.light .bg-rose-600.text-white,
+html.light .bg-rose-500.text-white,
+html.light .bg-amber-600.text-white,
+html.light .bg-purple-600.text-white,
+html.light .bg-purple-700.text-white,
+html.light .bg-indigo-600.text-white,
+html.light .bg-violet-600.text-white,
+html.light .bg-teal-600.text-white {
   color: #ffffff !important;
 }
 

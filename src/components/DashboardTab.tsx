@@ -194,7 +194,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-black text-red-700 dark:text-red-300 text-sm sm:text-base">تنبيه انخفاض المخزون</h3>
+                <h3 className="stock-alert-title font-black text-sm sm:text-base">تنبيه انخفاض المخزون</h3>
                 <span 
                   className="keep-white bg-gradient-to-r from-red-600 to-rose-600 text-white !text-white text-xs px-2.5 py-0.5 rounded-full font-black shadow-sm shadow-red-500/30 animate-pulse select-none"
                   style={{ color: '#ffffff' }}
@@ -202,12 +202,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   {lowStockProducts.length} أصناف
                 </span>
               </div>
-              <p className="text-xs font-semibold text-red-600/90 dark:text-red-300/80 mt-1 truncate">
+              <p className="stock-alert-desc text-xs font-bold mt-1 truncate">
                 تجاوزت الحد الأدنى: {lowStockProducts.slice(0, 3).map(p => p.name).join('، ')}{lowStockProducts.length > 3 ? '...' : ''}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1 text-xs font-black text-red-600 dark:text-red-400 shrink-0 mr-2">
+          <div className="stock-alert-action flex items-center gap-1 text-xs font-black shrink-0 mr-2">
             <span className="hidden sm:inline">مراجعة النواقص</span>
             <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
           </div>
