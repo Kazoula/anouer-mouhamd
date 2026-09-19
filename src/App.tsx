@@ -417,17 +417,35 @@ export default function App() {
               });
             }
 
+            // Calculate updated prices
+            let updatedSalePriceMinor = imp.salePriceMinor > 0 ? imp.salePriceMinor : existing.salePriceMinor;
+            let updatedPurchasePriceMinor = imp.purchasePriceMinor > 0 ? imp.purchasePriceMinor : existing.purchasePriceMinor;
+            
+            let updatedSalePriceMajor = imp.salePriceMajor > 0 ? imp.salePriceMajor : existing.salePriceMajor;
+            let updatedPurchasePriceMajor = imp.purchasePriceMajor > 0 ? imp.purchasePriceMajor : existing.purchasePriceMajor;
+
+            if (imp.salePriceMinor > 0 && (!imp.salePriceMajor || imp.salePriceMajor === imp.salePriceMinor) && (existing.piecesPerMajorUnit || 1) > 1) {
+              updatedSalePriceMajor = updatedSalePriceMinor * (existing.piecesPerMajorUnit || 1);
+            }
+            if (imp.purchasePriceMinor > 0 && (!imp.purchasePriceMajor || imp.purchasePriceMajor === imp.purchasePriceMinor) && (existing.piecesPerMajorUnit || 1) > 1) {
+              updatedPurchasePriceMajor = updatedPurchasePriceMinor * (existing.piecesPerMajorUnit || 1);
+            }
+
             updatedList[matchIdx] = {
               ...existing,
               barcode: imp.barcode || existing.barcode,
               category: imp.category || existing.category,
               majorUnit: imp.majorUnit || existing.majorUnit,
+              middleUnit: imp.middleUnit !== undefined ? imp.middleUnit : existing.middleUnit,
               minorUnit: imp.minorUnit || existing.minorUnit,
               piecesPerMajorUnit: imp.piecesPerMajorUnit || existing.piecesPerMajorUnit,
-              purchasePriceMinor: imp.purchasePriceMinor > 0 ? imp.purchasePriceMinor : existing.purchasePriceMinor,
-              purchasePriceMajor: imp.purchasePriceMajor > 0 ? imp.purchasePriceMajor : existing.purchasePriceMajor,
-              salePriceMinor: imp.salePriceMinor > 0 ? imp.salePriceMinor : existing.salePriceMinor,
-              salePriceMajor: imp.salePriceMajor > 0 ? imp.salePriceMajor : existing.salePriceMajor,
+              piecesPerMiddleUnit: imp.piecesPerMiddleUnit !== undefined ? imp.piecesPerMiddleUnit : existing.piecesPerMiddleUnit,
+              purchasePriceMinor: updatedPurchasePriceMinor,
+              purchasePriceMiddle: (imp.purchasePriceMiddle !== undefined && imp.purchasePriceMiddle > 0) ? imp.purchasePriceMiddle : existing.purchasePriceMiddle,
+              purchasePriceMajor: updatedPurchasePriceMajor,
+              salePriceMinor: updatedSalePriceMinor,
+              salePriceMiddle: (imp.salePriceMiddle !== undefined && imp.salePriceMiddle > 0) ? imp.salePriceMiddle : existing.salePriceMiddle,
+              salePriceMajor: updatedSalePriceMajor,
               stockPieces: newStock,
               minStockAlert: imp.minStockAlert || existing.minStockAlert,
               defaultSupplierId: imp.defaultSupplierId || existing.defaultSupplierId,
@@ -874,10 +892,18 @@ export default function App() {
           if (strategy === 'update') {
             updatedList[matchIdx] = {
               ...existing,
+              code: imp.code || existing.code,
               phone: imp.phone || existing.phone,
+              phone2: imp.phone2 || existing.phone2,
               company: imp.company || existing.company,
               address: imp.address || existing.address,
-              balance: imp.balance !== 0 ? imp.balance : existing.balance,
+              group: imp.group || existing.group,
+              currency: imp.currency || existing.currency,
+              balance: typeof imp.balance === 'number' && !isNaN(imp.balance) && imp.balance !== 0 ? imp.balance : existing.balance,
+              creditLimit: imp.creditLimit !== undefined ? imp.creditLimit : existing.creditLimit,
+              lastTransactionDate: imp.lastTransactionDate || existing.lastTransactionDate,
+              isActive: imp.isActive !== undefined ? imp.isActive : existing.isActive,
+              notes: imp.notes || existing.notes,
             };
           } else if (strategy === 'replace') {
             updatedList[matchIdx] = {
@@ -935,8 +961,13 @@ export default function App() {
             updatedList[matchIdx] = {
               ...existing,
               phone: imp.phone || existing.phone,
+              company: imp.company || existing.company,
               address: imp.address || existing.address,
-              balance: imp.balance !== 0 ? imp.balance : existing.balance,
+              balance: typeof imp.balance === 'number' && !isNaN(imp.balance) ? imp.balance : existing.balance,
+              creditLimit: imp.creditLimit !== undefined ? imp.creditLimit : existing.creditLimit,
+              lastTransactionDate: imp.lastTransactionDate || existing.lastTransactionDate,
+              isActive: imp.isActive !== undefined ? imp.isActive : existing.isActive,
+              notes: imp.notes || existing.notes,
             };
           } else if (strategy === 'replace') {
             updatedList[matchIdx] = {

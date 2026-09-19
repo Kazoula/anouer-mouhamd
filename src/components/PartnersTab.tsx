@@ -26,7 +26,12 @@ import {
   Loader2,
   Wallet,
   ArrowDownLeft,
-  ArrowUpRight
+  ArrowUpRight,
+  Hash,
+  Tag,
+  Coins,
+  LayoutList,
+  LayoutGrid
 } from 'lucide-react';
 import { Supplier, Customer, SaleInvoice, PurchaseInvoice, PartnerPayment } from '../types';
 import { formatCurrency, formatArabicDateTime } from '../utils/calculations';
@@ -98,19 +103,25 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
-  // Modals
+  // Modals and View Preferences
+  const [supplierViewMode, setSupplierViewMode] = useState<'table' | 'cards'>('table');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [supplierFormData, setSupplierFormData] = useState<Partial<Supplier>>({
+    code: '',
     name: '',
     phone: '',
+    phone2: '',
     company: '',
     address: '',
     balance: 0,
+    currency: '',
     creditLimit: undefined,
+    group: '',
     lastTransactionDate: '',
     isActive: true,
+    notes: '',
   });
 
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -204,9 +215,13 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
 
       const matchesSearch = !isSearching || (
         s.name.toLowerCase().includes(cleanSearch) ||
+        (s.code && s.code.toLowerCase().includes(cleanSearch)) ||
         (s.phone && s.phone.includes(cleanSearch)) ||
+        (s.phone2 && s.phone2.includes(cleanSearch)) ||
         (s.company && s.company.toLowerCase().includes(cleanSearch)) ||
-        (s.address && s.address.toLowerCase().includes(cleanSearch))
+        (s.address && s.address.toLowerCase().includes(cleanSearch)) ||
+        (s.group && s.group.toLowerCase().includes(cleanSearch)) ||
+        (s.currency && s.currency.toLowerCase().includes(cleanSearch))
       );
 
       if (!matchesSearch) return false;
@@ -239,8 +254,11 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
 
       const matchesSearch = !isSearching || (
         c.name.toLowerCase().includes(cleanSearch) ||
+        (c.code && c.code.toLowerCase().includes(cleanSearch)) ||
         (c.phone && c.phone.includes(cleanSearch)) ||
-        (c.address && c.address.toLowerCase().includes(cleanSearch))
+        (c.phone2 && c.phone2.includes(cleanSearch)) ||
+        (c.address && c.address.toLowerCase().includes(cleanSearch)) ||
+        (c.group && c.group.toLowerCase().includes(cleanSearch))
       );
 
       if (!matchesSearch) return false;
@@ -265,14 +283,19 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
   const openAddSupplier = () => {
     setEditingSupplier(null);
     setSupplierFormData({ 
+      code: `SUP-${String(suppliers.length + 1).padStart(3, '0')}`,
       name: '', 
       phone: '', 
+      phone2: '',
       company: '', 
       address: '', 
       balance: 0,
+      currency: currency,
       creditLimit: undefined,
+      group: '',
       lastTransactionDate: '',
       isActive: true,
+      notes: '',
     });
     setIsSupplierModalOpen(true);
   };
@@ -281,9 +304,17 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
     setEditingSupplier(s);
     setSupplierFormData({ 
       ...s,
+      code: s.code || '',
+      phone: s.phone || '',
+      phone2: s.phone2 || '',
+      company: s.company || '',
+      address: s.address || '',
+      currency: s.currency || currency,
+      group: s.group || '',
       creditLimit: s.creditLimit,
       lastTransactionDate: s.lastTransactionDate || '',
       isActive: s.isActive !== false,
+      notes: s.notes || '',
     });
     setIsSupplierModalOpen(true);
   };
@@ -294,16 +325,21 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
 
     const newSup: Supplier = {
       id: editingSupplier ? editingSupplier.id : `sup_${Date.now()}`,
+      code: supplierFormData.code?.trim() || undefined,
       name: supplierFormData.name.trim(),
       phone: supplierFormData.phone?.trim() || '',
+      phone2: supplierFormData.phone2?.trim() || undefined,
       company: supplierFormData.company?.trim() || '',
       address: supplierFormData.address?.trim() || '',
       balance: Number(supplierFormData.balance) || 0,
+      currency: supplierFormData.currency?.trim() || currency,
       creditLimit: supplierFormData.creditLimit !== undefined && supplierFormData.creditLimit !== null && !isNaN(Number(supplierFormData.creditLimit)) && Number(supplierFormData.creditLimit) > 0 
         ? Number(supplierFormData.creditLimit) 
         : undefined,
+      group: supplierFormData.group?.trim() || undefined,
       lastTransactionDate: supplierFormData.lastTransactionDate?.trim() || undefined,
       isActive: supplierFormData.isActive !== false,
+      notes: supplierFormData.notes?.trim() || undefined,
       createdAt: editingSupplier ? editingSupplier.createdAt : new Date().toISOString(),
     };
 
@@ -524,9 +560,42 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
           )}
         </div>
 
-        <span className="text-[11px] text-slate-400 font-mono">
-          معروض: {partnerType === 'suppliers' ? filteredSuppliers.length : filteredCustomers.length} من {partnerType === 'suppliers' ? suppliers.length : customers.length}
-        </span>
+        <div className="flex items-center gap-2">
+          {partnerType === 'suppliers' && (
+            <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700/80 text-[11px] font-medium shadow-xs">
+              <button
+                type="button"
+                onClick={() => setSupplierViewMode('table')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                  supplierViewMode === 'table'
+                    ? 'bg-blue-600 text-white font-bold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="عرض جدول الأعمدة التسعة للموردين"
+              >
+                <LayoutList className="w-3.5 h-3.5" />
+                <span>جدول الأعمدة</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSupplierViewMode('cards')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                  supplierViewMode === 'cards'
+                    ? 'bg-blue-600 text-white font-bold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="عرض بطاقات الموردين"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>بطاقات</span>
+              </button>
+            </div>
+          )}
+
+          <span className="text-[11px] text-slate-400 font-mono">
+            معروض: {partnerType === 'suppliers' ? filteredSuppliers.length : filteredCustomers.length} من {partnerType === 'suppliers' ? suppliers.length : customers.length}
+          </span>
+        </div>
       </div>
 
       {/* Partners List */}
@@ -538,7 +607,7 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
               {isSearching ? (
                 <>
                   <p className="font-bold text-slate-300">لا يوجد موردين مطابقين للبحث "{searchQuery}"</p>
-                  <p className="text-[11px] text-slate-500">تأكد من كتابة الاسم أو رقم الهاتف بشكل صحيح.</p>
+                  <p className="text-[11px] text-slate-500">تأكد من كتابة الاسم، الكود، المجموعة أو رقم الهاتف بشكل صحيح.</p>
                 </>
               ) : suppliers.length > 0 && zeroBalanceSuppliersCount === suppliers.length ? (
                 <>
@@ -551,10 +620,208 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                 <p className="text-slate-500">لا يوجد موردين مطابقين للبحث</p>
               )}
             </div>
+          ) : supplierViewMode === 'table' ? (
+            /* 9 Columns Supplier Table View */
+            <div className="bg-slate-850 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+              <div className="overflow-x-auto">
+                <table className="w-full text-right text-xs">
+                  <thead>
+                    <tr className="bg-slate-900 border-b border-slate-750 text-slate-300 font-bold select-none whitespace-nowrap">
+                      <th className="py-3 px-3 text-center">نشط</th>
+                      <th className="py-3 px-3">الاسم</th>
+                      <th className="py-3 px-3 text-center">الرقم</th>
+                      <th className="py-3 px-3">تيلفون 1</th>
+                      <th className="py-3 px-3 text-left">الرصيد</th>
+                      <th className="py-3 px-3 text-center">العملة</th>
+                      <th className="py-3 px-3 text-left">حد الائتمان</th>
+                      <th className="py-3 px-3 text-center">المجموعة</th>
+                      <th className="py-3 px-3 text-center">آخر تعامل</th>
+                      <th className="py-3 px-3 text-center">الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/70">
+                    {filteredSuppliers.map((supplier, idx) => {
+                      const supplierPurchases = purchases.filter(p => p.supplierId === supplier.id || p.supplierName === supplier.name);
+                      const isOverLimit = supplier.creditLimit !== undefined && supplier.creditLimit > 0 && supplier.balance > supplier.creditLimit;
+                      const supplierCurrency = supplier.currency || currency;
+
+                      return (
+                        <tr 
+                          key={supplier.id}
+                          className="hover:bg-slate-800/50 transition-colors"
+                        >
+                          {/* 1. نشط */}
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            {supplier.isActive === false ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+                                <span>غير نشط</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                <span>نشط</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* 2. الاسم */}
+                          <td className="py-3 px-3">
+                            <div className="font-bold text-white text-xs sm:text-sm">
+                              {supplier.name}
+                            </div>
+                            {supplier.company && (
+                              <div className="text-[11px] text-slate-400 font-medium truncate max-w-[180px]">
+                                {supplier.company}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* 3. الرقم */}
+                          <td className="py-3 px-3 text-center whitespace-nowrap font-mono text-xs">
+                            {supplier.code ? (
+                              <span className="px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-500/30 font-bold">
+                                {supplier.code}
+                              </span>
+                            ) : (
+                              <span className="text-slate-500">#{idx + 1}</span>
+                            )}
+                          </td>
+
+                          {/* 4. تيلفون 1 */}
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {supplier.phone ? (
+                              <a 
+                                href={`tel:${supplier.phone}`}
+                                className="inline-flex items-center gap-1.5 text-blue-400 hover:text-blue-300 font-mono text-xs hover:underline"
+                                dir="ltr"
+                              >
+                                <Phone className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                <span>{supplier.phone}</span>
+                              </a>
+                            ) : (
+                              <span className="text-slate-600">—</span>
+                            )}
+                            {supplier.phone2 && (
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5" dir="ltr">
+                                {supplier.phone2}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* 5. الرصيد */}
+                          <td className="py-3 px-3 text-left whitespace-nowrap">
+                            <span className={`font-mono font-bold text-xs sm:text-sm ${
+                              supplier.balance > 0 ? 'text-amber-400' : 'text-emerald-400'
+                            }`}>
+                              {formatCurrency(supplier.balance, supplierCurrency)}
+                            </span>
+                          </td>
+
+                          {/* 6. العملة */}
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-bold text-[11px]">
+                              {supplierCurrency}
+                            </span>
+                          </td>
+
+                          {/* 7. حد الائتمان */}
+                          <td className="py-3 px-3 text-left whitespace-nowrap">
+                            {supplier.creditLimit !== undefined && supplier.creditLimit > 0 ? (
+                              <div>
+                                <span className="font-mono font-bold text-amber-300 text-xs">
+                                  {formatCurrency(supplier.creditLimit, supplierCurrency)}
+                                </span>
+                                {isOverLimit && (
+                                  <span className="block text-[10px] font-bold text-rose-400">
+                                    تجاوز الحد!
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-600">—</span>
+                            )}
+                          </td>
+
+                          {/* 8. المجموعة */}
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            {supplier.group ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[11px] font-bold">
+                                <Tag className="w-3 h-3 text-purple-400" />
+                                <span>{supplier.group}</span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-600">—</span>
+                            )}
+                          </td>
+
+                          {/* 9. آخر تعامل */}
+                          <td className="py-3 px-3 text-center whitespace-nowrap text-xs text-slate-300">
+                            {supplier.lastTransactionDate || (supplierPurchases.length > 0 && supplierPurchases[0]?.date) ? (
+                              <span className="inline-flex items-center gap-1 font-mono text-[11px] text-slate-300">
+                                <Clock className="w-3 h-3 text-blue-400" />
+                                <span>
+                                  {supplier.lastTransactionDate || formatArabicDateTime(supplierPurchases[0].date)}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-600">—</span>
+                            )}
+                          </td>
+
+                          {/* 10. الإجراءات */}
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => setPaymentTarget({ type: 'supplier', data: supplier })}
+                                className="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all active:scale-95"
+                                title="تسجيل سند صرف (دفع للمورد)"
+                              >
+                                <Wallet className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setStatementPartner({ type: 'supplier', data: supplier })}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all"
+                                title="كشف حساب وفواتير المورد"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-blue-400" />
+                              </button>
+                              <button
+                                onClick={() => onStartPurchaseForSupplier(supplier.id)}
+                                className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-all"
+                                title="فاتورة شراء جديدة"
+                              >
+                                <Truck className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => openEditSupplier(supplier)}
+                                className="p-1.5 rounded-lg bg-slate-800 text-amber-400 hover:text-amber-300 border border-slate-700 transition-all"
+                                title="تعديل بيانات المورد"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setSupplierToDelete(supplier)}
+                                className="p-1.5 rounded-lg bg-rose-500/15 text-rose-400 hover:text-white hover:bg-rose-600 border border-rose-500/30 hover:border-rose-600 transition-all cursor-pointer"
+                                title="حذف المورد"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           ) : (
+            /* Cards View */
             filteredSuppliers.map((supplier, idx) => {
               const supplierPurchases = purchases.filter(p => p.supplierId === supplier.id || p.supplierName === supplier.name);
               const totalPurchasedFrom = supplierPurchases.reduce((acc, p) => acc + p.netAmount, 0);
+              const supplierCurrency = supplier.currency || currency;
 
               return (
                 <div
@@ -570,6 +837,17 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-bold text-sm text-white">{supplier.name}</h3>
+                            {supplier.code && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                                {supplier.code}
+                              </span>
+                            )}
+                            {supplier.group && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                                <Tag className="w-2.5 h-2.5" />
+                                <span>{supplier.group}</span>
+                              </span>
+                            )}
                             {supplier.isActive === false ? (
                               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
                                 غير نشط
@@ -593,8 +871,13 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                             className="flex items-center gap-1 text-blue-400 hover:underline font-mono"
                           >
                             <Phone className="w-3.5 h-3.5" />
-                            <span>{supplier.phone}</span>
+                            <span>تيلفون 1: {supplier.phone}</span>
                           </a>
+                        )}
+                        {supplier.phone2 && (
+                          <span className="flex items-center gap-1 text-slate-400 font-mono text-[11px]">
+                            <span>هاتف 2: {supplier.phone2}</span>
+                          </span>
                         )}
                         {supplier.address && (
                           <span className="flex items-center gap-1 text-slate-400">
@@ -633,7 +916,7 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                   <div className="bg-slate-900/80 rounded-xl p-2.5 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div>
                       <span className="text-[11px] text-slate-400 block">إجمالي التعاملات والتوريد:</span>
-                      <span className="font-bold text-white">{formatCurrency(totalPurchasedFrom, currency)}</span>
+                      <span className="font-bold text-white">{formatCurrency(totalPurchasedFrom, supplierCurrency)}</span>
                       <span className="text-[10px] text-slate-500 mr-1">({supplierPurchases.length} فواتير)</span>
                     </div>
 
@@ -641,10 +924,10 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                       <div className="text-right">
                         <span className="text-[11px] text-slate-400 flex items-center gap-1">
                           <CreditCard className="w-3 h-3 text-amber-400" />
-                          <span>حد الإئتمان:</span>
+                          <span>حد الائتمان:</span>
                         </span>
                         <span className="font-bold text-amber-400 font-mono">
-                          {formatCurrency(supplier.creditLimit, currency)}
+                          {formatCurrency(supplier.creditLimit, supplierCurrency)}
                         </span>
                         {supplier.balance > supplier.creditLimit && (
                           <span className="text-[10px] font-bold text-rose-400 block">تجاوز الحد!</span>
@@ -653,9 +936,9 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                     )}
 
                     <div className="text-left">
-                      <span className="text-[11px] text-slate-400 block">رصيد الحساب المالي:</span>
+                      <span className="text-[11px] text-slate-400 block">رصيد الحساب المالي ({supplierCurrency}):</span>
                       <span className={`font-bold ${supplier.balance > 0 ? 'text-amber-400 font-mono' : 'text-slate-400'}`}>
-                        {supplier.balance > 0 ? `مستحق له: ${formatCurrency(supplier.balance, currency)}` : 'خالص الحساب (0)'}
+                        {supplier.balance > 0 ? `مستحق له: ${formatCurrency(supplier.balance, supplierCurrency)}` : 'خالص الحساب (0)'}
                       </span>
                     </div>
                   </div>
@@ -875,27 +1158,62 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSaveSupplierSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">اسم المورد أو المسؤول *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="مثال: شركة الأغذية المتحدة"
-                  value={supplierFormData.name || ''}
-                  onChange={(e) => setSupplierFormData({ ...supplierFormData, name: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium focus:outline-none focus:border-blue-500"
-                />
+            <form onSubmit={handleSaveSupplierSubmit} className="space-y-3 text-xs max-h-[75vh] overflow-y-auto pr-1 pl-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="sm:col-span-2">
+                  <label className="block text-slate-300 font-bold mb-1">الاسم (اسم المورد أو المسؤول) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="مثال: شركة الأغذية المتحدة"
+                    value={supplierFormData.name || ''}
+                    onChange={(e) => setSupplierFormData({ ...supplierFormData, name: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">الرقم / الكود</label>
+                  <input
+                    type="text"
+                    placeholder="مثال: SUP-001"
+                    value={supplierFormData.code || ''}
+                    onChange={(e) => setSupplierFormData({ ...supplierFormData, code: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">رقم الهاتف / الجوال</label>
+                  <label className="block text-slate-300 font-semibold mb-1">تيلفون 1 (رئيسي) *</label>
                   <input
                     type="text"
                     placeholder="05xxxxxxxx"
                     value={supplierFormData.phone || ''}
                     onChange={(e) => setSupplierFormData({ ...supplierFormData, phone: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">تيلفون 2 (إضافي / واتساب)</label>
+                  <input
+                    type="text"
+                    placeholder="05xxxxxxxx"
+                    value={supplierFormData.phone2 || ''}
+                    onChange={(e) => setSupplierFormData({ ...supplierFormData, phone2: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">المجموعة / التصنيف</label>
+                  <input
+                    type="text"
+                    placeholder="مثال: ألبان، مجمدات، مواد تعبئة..."
+                    value={supplierFormData.group || ''}
+                    onChange={(e) => setSupplierFormData({ ...supplierFormData, group: e.target.value })}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
                   />
                 </div>
@@ -911,18 +1229,7 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">العنوان / المدينة</label>
-                <input
-                  type="text"
-                  placeholder="الرياض - حي الملز..."
-                  value={supplierFormData.address || ''}
-                  onChange={(e) => setSupplierFormData({ ...supplierFormData, address: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div>
                   <label className="block text-slate-300 font-semibold mb-1">الرصيد الافتتاحي المستحق له</label>
                   <input
@@ -935,7 +1242,18 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">حد الإئتمان (اختياري)</label>
+                  <label className="block text-slate-300 font-semibold mb-1">العملة</label>
+                  <input
+                    type="text"
+                    placeholder={currency || 'العملة'}
+                    value={supplierFormData.currency || ''}
+                    onChange={(e) => setSupplierFormData({ ...supplierFormData, currency: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">حد الائتمان (اختياري)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -959,7 +1277,7 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">حالة المورد في النظام</label>
+                  <label className="block text-slate-300 font-semibold mb-1">حالة المورد (نشط)</label>
                   <label className="flex items-center gap-2 cursor-pointer bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-xl px-3 py-2 mt-0.5 select-none">
                     <input
                       type="checkbox"
@@ -968,10 +1286,32 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                       className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4 bg-slate-850 border-slate-700"
                     />
                     <span className={`font-bold text-xs ${supplierFormData.isActive !== false ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {supplierFormData.isActive !== false ? 'مورد نشط' : 'مورد غير نشط (موقوف)'}
+                      {supplierFormData.isActive !== false ? 'نشط (مفعل)' : 'غير نشط (موقوف)'}
                     </span>
                   </label>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">العنوان / المدينة</label>
+                <input
+                  type="text"
+                  placeholder="الرياض - حي الملز..."
+                  value={supplierFormData.address || ''}
+                  onChange={(e) => setSupplierFormData({ ...supplierFormData, address: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">ملاحظات إضافية</label>
+                <input
+                  type="text"
+                  placeholder="شروط التوريد، أوقات الاستلام..."
+                  value={supplierFormData.notes || ''}
+                  onChange={(e) => setSupplierFormData({ ...supplierFormData, notes: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                />
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">

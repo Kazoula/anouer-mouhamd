@@ -20,7 +20,10 @@ import {
   DollarSign,
   CreditCard,
   Calendar,
-  Activity
+  Activity,
+  Hash,
+  Tag,
+  Coins
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Customer, Supplier } from '../types';
@@ -39,22 +42,29 @@ interface ImportPartnersModalProps {
 
 interface CustomerMapping {
   name: string;
+  code: string;
   phone: string;
   address: string;
   balance: string;
+  currency: string;
   creditLimit: string;
+  group: string;
   lastTransactionDate: string;
   isActive: string;
+  company: string;
   notes: string;
 }
 
 interface SupplierMapping {
   name: string;
+  code: string;
   phone: string;
   company: string;
   address: string;
   balance: string;
+  currency: string;
   creditLimit: string;
+  group: string;
   lastTransactionDate: string;
   isActive: string;
   notes: string;
@@ -104,22 +114,29 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
   // Mappings
   const [customerMapping, setCustomerMapping] = useState<CustomerMapping>({
     name: '',
+    code: '',
     phone: '',
     address: '',
     balance: '',
+    currency: '',
     creditLimit: '',
+    group: '',
     lastTransactionDate: '',
     isActive: '',
+    company: '',
     notes: '',
   });
 
   const [supplierMapping, setSupplierMapping] = useState<SupplierMapping>({
     name: '',
+    code: '',
     phone: '',
     company: '',
     address: '',
     balance: '',
+    currency: '',
     creditLimit: '',
+    group: '',
     lastTransactionDate: '',
     isActive: '',
     notes: '',
@@ -138,6 +155,14 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
   // Auto-detect columns
   const autoDetectMapping = (headers: string[], type: 'customers' | 'suppliers') => {
     const findHeader = (aliases: string[]): string => {
+      // 1. Exact match pass
+      const exactMatch = headers.find(h => {
+        const cleaned = h.toLowerCase().trim().replace(/[\s_-]+/g, '');
+        return aliases.some(a => cleaned === a.toLowerCase().trim().replace(/[\s_-]+/g, ''));
+      });
+      if (exactMatch) return exactMatch;
+
+      // 2. Includes match pass
       const match = headers.find(h => {
         const cleaned = h.toLowerCase().trim().replace(/[\s_-]+/g, '');
         return aliases.some(a => cleaned.includes(a.toLowerCase().trim().replace(/[\s_-]+/g, '')));
@@ -147,26 +172,33 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
 
     if (type === 'customers') {
       return {
-        name: findHeader(['اسم العميل', 'اسم الزبون', 'العميل', 'الزبون', 'اسم_العميل', 'الاسم', 'name', 'customer', 'client', 'nom']),
-        phone: findHeader(['رقم الهاتف', 'الهاتف', 'الجوال', 'الموبايل', 'رقم الجوال', 'phone', 'mobile', 'tel', 'telephone']),
+        name: findHeader(['اسم العميل', 'الاسم', 'اسم الزبون', 'العميل', 'الزبون', 'اسم_العميل', 'name', 'customer', 'client', 'nom']),
+        code: findHeader(['الرقم', 'كود العميل', 'رقم العميل', 'الكود', 'كود', 'code', 'customer_code', 'number', 'num', 'id']),
+        phone: findHeader(['تيلفون 1', 'تلفون 1', 'تليفون 1', 'هاتف 1', 'تيلفون1', 'تلفون1', 'تليفون1', 'رقم الهاتف', 'الهاتف', 'الجوال', 'الموبايل', 'تيلفون', 'تلفون', 'تليفون', 'phone 1', 'phone1', 'phone', 'mobile', 'tel', 'telephone']),
         address: findHeader(['العنوان', 'المنطقة', 'المدينة', 'الموقع', 'address', 'city', 'adresse']),
-        balance: findHeader(['الرصيد', 'الرصيد الافتتاحي', 'المديونية', 'الحساب', 'المستحق', 'balance', 'solde', 'due']),
-        creditLimit: findHeader(['حد الائتمان', 'حد الإئتمان', 'الائتمان', 'الإئتمان', 'سقف الائتمان', 'حد الدين', 'credit limit', 'credit_limit', 'limit', 'plafond']),
-        lastTransactionDate: findHeader(['آخر تعامل', 'اخر تعامل', 'تاريخ آخر تعامل', 'تاريخ اخر تعامل', 'اخر حركة', 'آخر حركة', 'تاريخ الحركة', 'last transaction', 'last_transaction', 'last deal', 'last_deal', 'date']),
+        balance: findHeader(['السعر', 'سعر', 'السعر الجديد', 'السعر المستورد', 'سعر العميل', 'الرصيد', 'الرصيد الافتتاحي', 'المديونية', 'الحساب', 'المستحق', 'الدين', 'المبلغ', 'القيمة', 'balance', 'solde', 'due', 'price', 'amount', 'montant']),
+        currency: findHeader(['العملة', 'عملة', 'نوع العملة', 'رمز العملة', 'currency', 'devise']),
+        creditLimit: findHeader(['حد الاتمان', 'حد الإئتمان', 'حد الائتمان', 'الائتمان', 'الإئتمان', 'سقف الائتمان', 'حد الدين', 'credit limit', 'credit_limit', 'limit', 'plafond']),
+        group: findHeader(['المجموعة', 'مجموعة', 'فئة العميل', 'الفئة', 'التصنيف', 'القسم', 'group', 'category', 'categorie']),
+        lastTransactionDate: findHeader(['اخر تعامل', 'آخر تعامل', 'تاريخ آخر تعامل', 'تاريخ اخر تعامل', 'اخر حركة', 'آخر حركة', 'تاريخ الحركة', 'last transaction', 'last_transaction', 'last deal', 'last_deal', 'date']),
         isActive: findHeader(['نشط', 'الحالة', 'نشط؟', 'حالة الشريك', 'حالة الحساب', 'حالة العميل', 'active', 'status', 'actif', 'statut']),
+        company: findHeader(['الشركة', 'المؤسسة', 'اسم الشركة', 'المصنع', 'company', 'societe', 'enterprise']),
         notes: findHeader(['ملاحظات', 'الوصف', 'تفاصيل', 'notes', 'remarques', 'comment']),
       };
     } else {
       return {
-        name: findHeader(['اسم المورد', 'المورد', 'اسم_المورد', 'الاسم', 'name', 'supplier', 'fournisseur', 'vendor']),
-        phone: findHeader(['رقم الهاتف', 'الهاتف', 'الجوال', 'الموبايل', 'phone', 'mobile', 'tel']),
-        company: findHeader(['الشركة', 'المؤسسة', 'اسم الشركة', 'المصنع', 'company', 'societe', 'enterprise']),
-        address: findHeader(['العنوان', 'المقر', 'المدينة', 'الموقع', 'address', 'city', 'adresse']),
-        balance: findHeader(['الرصيد', 'الرصيد الافتتاحي', 'المستحق للمورد', 'الحساب', 'balance', 'solde']),
-        creditLimit: findHeader(['حد الائتمان', 'حد الإئتمان', 'الائتمان', 'الإئتمان', 'سقف الائتمان', 'حد الدين', 'credit limit', 'credit_limit', 'limit', 'plafond']),
-        lastTransactionDate: findHeader(['آخر تعامل', 'اخر تعامل', 'تاريخ آخر تعامل', 'تاريخ اخر تعامل', 'اخر حركة', 'آخر حركة', 'تاريخ الحركة', 'last transaction', 'last_transaction', 'last deal', 'last_deal', 'date']),
+        name: findHeader(['الاسم', 'اسم المورد', 'اسم_المورد', 'المورد', 'name', 'supplier', 'fournisseur', 'vendor', 'nom']),
+        code: findHeader(['الرقم', 'رقم المورد', 'كود المورد', 'الكود', 'كود', 'الرمز', 'code', 'supplier_code', 'number', 'num', 'id']),
+        phone: findHeader(['تيلفون 1', 'تلفون 1', 'تليفون 1', 'هاتف 1', 'تيلفون1', 'تلفون1', 'تليفون1', 'رقم الهاتف', 'الهاتف', 'الجوال', 'الموبايل', 'تيلفون', 'تلفون', 'تليفون', 'phone 1', 'phone1', 'phone', 'mobile', 'tel', 'telephone']),
+        balance: findHeader(['الرصيد', 'رصيد', 'الرصيد الافتتاحي', 'المستحق للمورد', 'الحساب', 'السعر', 'سعر', 'المبلغ', 'balance', 'solde', 'due']),
+        currency: findHeader(['العملة', 'عملة', 'نوع العملة', 'رمز العملة', 'currency', 'devise']),
+        creditLimit: findHeader(['حد الاتمان', 'حد الإئتمان', 'حد الائتمان', 'الائتمان', 'الإئتمان', 'سقف الائتمان', 'حد الدين', 'credit limit', 'credit_limit', 'limit', 'plafond']),
+        group: findHeader(['المجموعة', 'مجموعة', 'فئة المورد', 'الفئة', 'التصنيف', 'القسم', 'group', 'category', 'categorie']),
+        lastTransactionDate: findHeader(['اخر تعامل', 'آخر تعامل', 'تاريخ آخر تعامل', 'تاريخ اخر تعامل', 'اخر حركة', 'آخر حركة', 'تاريخ الحركة', 'last transaction', 'last_transaction', 'last deal', 'last_deal', 'date']),
         isActive: findHeader(['نشط', 'الحالة', 'نشط؟', 'حالة الشريك', 'حالة الحساب', 'حالة المورد', 'active', 'status', 'actif', 'statut']),
-        notes: findHeader(['ملاحظات', 'الوصف', 'تفاصيل', 'notes', 'remarques']),
+        company: findHeader(['اسم الشركة', 'الشركة', 'المؤسسة', 'المصنع', 'company', 'societe', 'enterprise']),
+        address: findHeader(['العنوان', 'المقر', 'المدينة', 'الموقع', 'address', 'city', 'adresse']),
+        notes: findHeader(['ملاحظات', 'الوصف', 'تفاصيل', 'notes', 'remarques', 'comment']),
       };
     }
   };
@@ -308,14 +340,19 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
 
       const processed: ParsedCustomerRow[] = rawRows.map((rawRow, idx) => {
         const nameVal = String(rawRow[customerMapping.name] || '').trim();
+        const codeVal = customerMapping.code ? String(rawRow[customerMapping.code] || '').trim() : '';
         const phoneVal = customerMapping.phone ? String(rawRow[customerMapping.phone] || '').trim() : '';
+        const companyVal = customerMapping.company ? String(rawRow[customerMapping.company] || '').trim() : '';
         const addressVal = customerMapping.address ? String(rawRow[customerMapping.address] || '').trim() : '';
+        const groupVal = customerMapping.group ? String(rawRow[customerMapping.group] || '').trim() : '';
+        const currencyVal = customerMapping.currency ? String(rawRow[customerMapping.currency] || '').trim() : '';
         const balRaw = customerMapping.balance ? parseFloat(String(rawRow[customerMapping.balance]).replace(/[^0-9.-]+/g, '')) : 0;
         const balanceVal = !isNaN(balRaw) ? balRaw : 0;
 
         const creditLimitRaw = customerMapping.creditLimit ? parseFloat(String(rawRow[customerMapping.creditLimit]).replace(/[^0-9.-]+/g, '')) : undefined;
         const creditLimitVal = creditLimitRaw !== undefined && !isNaN(creditLimitRaw) ? creditLimitRaw : undefined;
         const lastTxDateVal = customerMapping.lastTransactionDate ? String(rawRow[customerMapping.lastTransactionDate] || '').trim() : '';
+        const notesVal = customerMapping.notes ? String(rawRow[customerMapping.notes] || '').trim() : '';
         let isActiveVal = true;
         if (customerMapping.isActive) {
           const actRaw = String(rawRow[customerMapping.isActive] || '').trim().toLowerCase();
@@ -330,18 +367,25 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
         }
 
         const existingMatch = existingCustomers.find(
-          c => (phoneVal && c.phone === phoneVal) || (nameVal && c.name.toLowerCase() === nameVal.toLowerCase())
+          c => (codeVal && c.code && c.code.toLowerCase() === codeVal.toLowerCase()) ||
+               (phoneVal && c.phone === phoneVal) ||
+               (nameVal && c.name.toLowerCase() === nameVal.toLowerCase())
         );
 
         const mappedCustomer: Partial<Customer> = {
           id: existingMatch ? existingMatch.id : `cust_imp_${Date.now()}_${idx}`,
+          code: codeVal || (existingMatch ? existingMatch.code : undefined),
           name: nameVal,
           phone: phoneVal,
+          company: companyVal || (existingMatch ? existingMatch.company : undefined),
           address: addressVal,
+          group: groupVal || (existingMatch ? existingMatch.group : undefined),
+          currency: currencyVal || (existingMatch ? existingMatch.currency : undefined),
           balance: balanceVal,
           creditLimit: creditLimitVal,
           lastTransactionDate: lastTxDateVal || (existingMatch ? existingMatch.lastTransactionDate : undefined),
           isActive: customerMapping.isActive ? isActiveVal : (existingMatch?.isActive !== undefined ? existingMatch.isActive : true),
+          notes: notesVal || (existingMatch?.notes || undefined),
           createdAt: existingMatch ? existingMatch.createdAt : new Date().toISOString(),
         };
 
@@ -368,9 +412,12 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
 
       const processed: ParsedSupplierRow[] = rawRows.map((rawRow, idx) => {
         const nameVal = String(rawRow[supplierMapping.name] || '').trim();
+        const codeVal = supplierMapping.code ? String(rawRow[supplierMapping.code] || '').trim() : '';
         const phoneVal = supplierMapping.phone ? String(rawRow[supplierMapping.phone] || '').trim() : '';
         const companyVal = supplierMapping.company ? String(rawRow[supplierMapping.company] || '').trim() : '';
         const addressVal = supplierMapping.address ? String(rawRow[supplierMapping.address] || '').trim() : '';
+        const groupVal = supplierMapping.group ? String(rawRow[supplierMapping.group] || '').trim() : '';
+        const currencyVal = supplierMapping.currency ? String(rawRow[supplierMapping.currency] || '').trim() : '';
         const balRaw = supplierMapping.balance ? parseFloat(String(rawRow[supplierMapping.balance]).replace(/[^0-9.-]+/g, '')) : 0;
         const balanceVal = !isNaN(balRaw) ? balRaw : 0;
 
@@ -384,6 +431,7 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
             isActiveVal = false;
           }
         }
+        const notesVal = supplierMapping.notes ? String(rawRow[supplierMapping.notes] || '').trim() : '';
 
         const errorMessages: string[] = [];
         if (!nameVal) {
@@ -391,19 +439,25 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
         }
 
         const existingMatch = existingSuppliers.find(
-          s => (phoneVal && s.phone === phoneVal) || (nameVal && s.name.toLowerCase() === nameVal.toLowerCase())
+          s => (codeVal && s.code && s.code.toLowerCase() === codeVal.toLowerCase()) ||
+               (phoneVal && s.phone === phoneVal) ||
+               (nameVal && s.name.toLowerCase() === nameVal.toLowerCase())
         );
 
         const mappedSupplier: Partial<Supplier> = {
           id: existingMatch ? existingMatch.id : `sup_imp_${Date.now()}_${idx}`,
+          code: codeVal || (existingMatch ? existingMatch.code : undefined),
           name: nameVal,
           phone: phoneVal,
           company: companyVal,
           address: addressVal,
+          group: groupVal || (existingMatch ? existingMatch.group : undefined),
+          currency: currencyVal || (existingMatch ? existingMatch.currency : undefined),
           balance: balanceVal,
           creditLimit: creditLimitVal,
           lastTransactionDate: lastTxDateVal || (existingMatch ? existingMatch.lastTransactionDate : undefined),
           isActive: supplierMapping.isActive ? isActiveVal : (existingMatch?.isActive !== undefined ? existingMatch.isActive : true),
+          notes: notesVal || (existingMatch ? existingMatch.notes : undefined),
           createdAt: existingMatch ? existingMatch.createdAt : new Date().toISOString(),
         };
 
@@ -522,20 +576,43 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
     } else {
       const sample = [
         {
-          'اسم المورد': 'شركة البركة للمواد الغذائية',
+          'نشط': 'نعم',
+          'الاسم': 'شركة البركة للمواد الغذائية',
+          'الرقم': 'SUP-001',
+          'تيلفون 1': '0501234567',
+          'الرصيد': 1500.00,
+          'العملة': 'د.ج',
+          'حد الإئتمان': 50000.00,
+          'المجموعة': 'مواد غذائية',
+          'آخر تعامل': '2026-09-15',
           'اسم الشركة': 'مجموعة البركة الدولية',
-          'رقم الهاتف': '0112345678',
-          'العنوان': 'الرياض - المنطقة الصناعية الثانية',
-          'الرصيد الافتتاحي': 1500.00,
-          'ملاحظات': 'مورد رئيسي للأرز والزيوت'
+          'العنوان': 'الجزائر - المنطقة الصناعية'
         },
         {
-          'اسم المورد': 'مؤسسة الهضاب للتوزيع',
+          'نشط': 'نعم',
+          'الاسم': 'مؤسسة الهضاب للتوزيع',
+          'الرقم': 'SUP-002',
+          'تيلفون 1': '0559876543',
+          'الرصيد': 0.00,
+          'العملة': 'د.ج',
+          'حد الإئتمان': 20000.00,
+          'المجموعة': 'توزيع وجملة',
+          'آخر تعامل': '2026-09-10',
           'اسم الشركة': 'الهضاب للتجارة',
-          'رقم الهاتف': '0129876543',
-          'العنوان': 'جدة - ميناء جدة الإسلامي',
-          'الرصيد الافتتاحي': 0.00,
-          'ملاحظات': 'توريد أسبوعي'
+          'العنوان': 'وهران - حي السلام'
+        },
+        {
+          'نشط': 'لا',
+          'الاسم': 'مكتب التقنية للتجهيزات',
+          'الرقم': 'SUP-003',
+          'تيلفون 1': '0543322110',
+          'الرصيد': -350.00,
+          'العملة': 'د.ج',
+          'حد الإئتمان': 10000.00,
+          'المجموعة': 'أجهزة وإلكترونيات',
+          'آخر تعامل': '2026-08-20',
+          'اسم الشركة': 'التقنية الحديثة',
+          'العنوان': 'قسنطينة'
         }
       ];
 
@@ -876,7 +953,10 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
 
                 {/* Balance */}
                 <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
-                  <label className="text-slate-300 font-bold block">الرصيد الافتتاحي (مدين/دائن)</label>
+                  <label className="text-slate-300 font-bold block flex items-center justify-between">
+                    <span>الرصيد / السعر الجديد المستورد (الحساب أو المديونية)</span>
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-normal">تجديد فوري</span>
+                  </label>
                   <select
                     value={customerMapping.balance}
                     onChange={(e) => setCustomerMapping({ ...customerMapping, balance: e.target.value })}
@@ -944,135 +1024,228 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
                 </div>
               </div>
             ) : (
-              /* Supplier Mapping Fields */
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                {/* Name */}
-                <div className="bg-slate-850 p-3 rounded-2xl border border-blue-500/50 space-y-1">
-                  <label className="text-blue-400 font-bold block">اسم المورد * (إلزامي)</label>
-                  <select
-                    value={supplierMapping.name}
-                    onChange={(e) => setSupplierMapping({ ...supplierMapping, name: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white font-semibold focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">-- اختر عمود اسم المورد --</option>
-                    {rawHeaders.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
+              /* Supplier Mapping Fields - Featuring the 9 requested columns */
+              <div className="space-y-4">
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-3 text-xs text-blue-300 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-blue-400 shrink-0" />
+                    <span className="font-bold">أعمدة الموردين المعتمدة: نشط، الاسم، الرقم، تيلفون 1، الرصيد، العملة، حد الائتمان، المجموعة، آخر تعامل</span>
+                  </div>
+                  <span className="text-[11px] bg-blue-500/20 px-2 py-0.5 rounded-full font-mono font-bold">مطابقة تلقائية</span>
                 </div>
 
-                {/* Company */}
-                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
-                  <label className="text-slate-300 font-bold block">اسم الشركة / المؤسسة</label>
-                  <select
-                    value={supplierMapping.company}
-                    onChange={(e) => setSupplierMapping({ ...supplierMapping, company: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">-- اختر عمود الشركة --</option>
-                    {rawHeaders.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                  {/* 1. نشط */}
+                  <div className="bg-slate-850 p-3 rounded-2xl border border-emerald-500/30 space-y-1">
+                    <label className="text-emerald-400 font-bold flex items-center gap-1.5">
+                      <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>1. نشط / حالة المورد</span>
+                    </label>
+                    <select
+                      value={supplierMapping.isActive}
+                      onChange={(e) => setSupplierMapping({ ...supplierMapping, isActive: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- افتراضي (نشط) --</option>
+                      {rawHeaders.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 2. الاسم */}
+                  <div className="bg-slate-850 p-3 rounded-2xl border border-blue-500/50 space-y-1">
+                    <label className="text-blue-400 font-bold block flex items-center gap-1.5">
+                      <span>2. الاسم * (إلزامي)</span>
+                    </label>
+                    <select
+                      value={supplierMapping.name}
+                      onChange={(e) => setSupplierMapping({ ...supplierMapping, name: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white font-semibold focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- اختر عمود الاسم --</option>
+                      {rawHeaders.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 3. الرقم */}
+                  <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                    <label className="text-slate-300 font-bold flex items-center gap-1.5">
+                      <Hash className="w-3.5 h-3.5 text-blue-400" />
+                      <span>3. الرقم / كود المورد</span>
+                    </label>
+                    <select
+                      value={supplierMapping.code}
+                      onChange={(e) => setSupplierMapping({ ...supplierMapping, code: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- تلقائي / بدون كود --</option>
+                      {rawHeaders.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 4. تيلفون 1 */}
+                  <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                    <label className="text-slate-300 font-bold flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-slate-400" />
+                      <span>4. تيلفون 1 / الهاتف</span>
+                    </label>
+                    <select
+                      value={supplierMapping.phone}
+                      onChange={(e) => setSupplierMapping({ ...supplierMapping, phone: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- اختر عمود تيلفون 1 --</option>
+                      {rawHeaders.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 5. الرصيد */}
+                  <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                    <label className="text-slate-300 font-bold flex items-center gap-1.5">
+                      <DollarSign className="w-3.5 h-3.5 text-blue-400" />
+                      <span>5. الرصيد الافتتاحي</span>
+                    </label>
+                    <select
+                      value={supplierMapping.balance}
+                      onChange={(e) => setSupplierMapping({ ...supplierMapping, balance: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- افتراضي (0) --</option>
+                      {rawHeaders.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 6. العملة */}
+                  <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                    <label className="text-slate-300 font-bold flex items-center gap-1.5">
+                      <Coins className="w-3.5 h-3.5 text-amber-400" />
+                      <span>6. العملة</span>
+                    </label>
+                    <select
+                      value={supplierMapping.currency}
+                      onChange={(e) => setSupplierMapping({ ...supplierMapping, currency: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- افتراضي عملة النظام ({currency}) --</option>
+                      {rawHeaders.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 7. حد الإئتمان */}
+                  <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                    <label className="text-slate-300 font-bold flex items-center gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+                      <span>7. حد الاتمان / حد الإئتمان</span>
+                    </label>
+                    <select
+                      value={supplierMapping.creditLimit}
+                      onChange={(e) => setSupplierMapping({ ...supplierMapping, creditLimit: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- بدون حد ائتماني (اختياري) --</option>
+                      {rawHeaders.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 8. المجموعة */}
+                  <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                    <label className="text-slate-300 font-bold flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-purple-400" />
+                      <span>8. المجموعة / فئة المورد</span>
+                    </label>
+                    <select
+                      value={supplierMapping.group}
+                      onChange={(e) => setSupplierMapping({ ...supplierMapping, group: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- بدون مجموعة (اختياري) --</option>
+                      {rawHeaders.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 9. آخر تعامل */}
+                  <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
+                    <label className="text-slate-300 font-bold flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                      <span>9. اخر تعامل</span>
+                    </label>
+                    <select
+                      value={supplierMapping.lastTransactionDate}
+                      onChange={(e) => setSupplierMapping({ ...supplierMapping, lastTransactionDate: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- اختر عمود آخر تعامل (اختياري) --</option>
+                      {rawHeaders.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                {/* Phone */}
-                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
-                  <label className="text-slate-300 font-bold block">رقم الهاتف / الجوال</label>
-                  <select
-                    value={supplierMapping.phone}
-                    onChange={(e) => setSupplierMapping({ ...supplierMapping, phone: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">-- اختر عمود الهاتف --</option>
-                    {rawHeaders.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                </div>
+                {/* Additional optional fields */}
+                <div className="pt-2 border-t border-slate-800/80">
+                  <div className="text-[11px] text-slate-400 mb-2 font-medium">حقول إضافية اختيارية:</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    {/* Company */}
+                    <div className="bg-slate-850 p-2.5 rounded-xl border border-slate-800 space-y-1">
+                      <label className="text-slate-400 font-medium block">اسم الشركة / المؤسسة</label>
+                      <select
+                        value={supplierMapping.company}
+                        onChange={(e) => setSupplierMapping({ ...supplierMapping, company: e.target.value })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="">-- غير محدد --</option>
+                        {rawHeaders.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                {/* Address */}
-                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
-                  <label className="text-slate-300 font-bold block">العنوان / المقر</label>
-                  <select
-                    value={supplierMapping.address}
-                    onChange={(e) => setSupplierMapping({ ...supplierMapping, address: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">-- اختر عمود العنوان --</option>
-                    {rawHeaders.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                </div>
+                    {/* Address */}
+                    <div className="bg-slate-850 p-2.5 rounded-xl border border-slate-800 space-y-1">
+                      <label className="text-slate-400 font-medium block">العنوان / المقر</label>
+                      <select
+                        value={supplierMapping.address}
+                        onChange={(e) => setSupplierMapping({ ...supplierMapping, address: e.target.value })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="">-- غير محدد --</option>
+                        {rawHeaders.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                {/* Balance */}
-                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
-                  <label className="text-slate-300 font-bold block">الرصيد الافتتاحي المستحق للمورد</label>
-                  <select
-                    value={supplierMapping.balance}
-                    onChange={(e) => setSupplierMapping({ ...supplierMapping, balance: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">-- افتراضي (0) --</option>
-                    {rawHeaders.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Credit Limit */}
-                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
-                  <label className="text-slate-300 font-bold flex items-center gap-1">
-                    <CreditCard className="w-3.5 h-3.5 text-amber-400" />
-                    <span>حد الإئتمان</span>
-                  </label>
-                  <select
-                    value={supplierMapping.creditLimit}
-                    onChange={(e) => setSupplierMapping({ ...supplierMapping, creditLimit: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">-- بدون حد ائتماني (اختياري) --</option>
-                    {rawHeaders.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Last Transaction */}
-                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
-                  <label className="text-slate-300 font-bold flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-blue-400" />
-                    <span>آخر تعامل</span>
-                  </label>
-                  <select
-                    value={supplierMapping.lastTransactionDate}
-                    onChange={(e) => setSupplierMapping({ ...supplierMapping, lastTransactionDate: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">-- اختر عمود آخر تعامل (اختياري) --</option>
-                    {rawHeaders.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Active Status */}
-                <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
-                  <label className="text-slate-300 font-bold flex items-center gap-1">
-                    <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>نشط / حالة المورد</span>
-                  </label>
-                  <select
-                    value={supplierMapping.isActive}
-                    onChange={(e) => setSupplierMapping({ ...supplierMapping, isActive: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">-- افتراضي (نشط) --</option>
-                    {rawHeaders.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
+                    {/* Notes */}
+                    <div className="bg-slate-850 p-2.5 rounded-xl border border-slate-800 space-y-1">
+                      <label className="text-slate-400 font-medium block">ملاحظات</label>
+                      <select
+                        value={supplierMapping.notes}
+                        onChange={(e) => setSupplierMapping({ ...supplierMapping, notes: e.target.value })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="">-- غير محدد --</option>
+                        {rawHeaders.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1119,7 +1292,7 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
                         : 'bg-slate-800 border-slate-700 text-slate-400'
                     }`}
                   >
-                    تحديث البيانات
+                    تحديث وتجديد السعر/الرصيد
                   </button>
                   <button
                     type="button"
@@ -1144,6 +1317,13 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
                     استبدال كلي
                   </button>
                 </div>
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                  {importStrategy === 'update'
+                    ? '✓ سيتم تحديث بيانات العميل وتجديد السعر/الرصيد بالقيمة الجديدة المستوردة من الشيت.'
+                    : importStrategy === 'skip'
+                    ? 'تخطي السجلات الموجودة مسبقاً والإبقاء على بياناتها وأسعارها الحالية دون تعديل.'
+                    : 'استبدال كامل لبيانات الشريك مع اعتماد الرصيد والسعر الجديد المستورد كلياً.'}
+                </p>
               </div>
 
               {/* Status Chips Filter */}
@@ -1224,15 +1404,30 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
             <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-900 flex-1 max-h-72 overflow-y-auto">
               <table className="w-full text-right text-xs">
                 <thead className="bg-slate-800 text-slate-300 font-bold sticky top-0 z-10 text-[11px]">
-                  <tr>
-                    <th className="p-2.5 w-10 text-center">اختيار</th>
-                    <th className="p-2.5">الاسم</th>
-                    {partnerType === 'suppliers' && <th className="p-2.5">الشركة</th>}
-                    <th className="p-2.5">الهاتف</th>
-                    <th className="p-2.5">العنوان</th>
-                    <th className="p-2.5">الرصيد الافتتاحي</th>
-                    <th className="p-2.5">الحالة</th>
-                  </tr>
+                  {partnerType === 'customers' ? (
+                    <tr>
+                      <th className="p-2.5 w-10 text-center">اختيار</th>
+                      <th className="p-2.5">الاسم</th>
+                      <th className="p-2.5">الهاتف</th>
+                      <th className="p-2.5">العنوان</th>
+                      <th className="p-2.5">الرصيد الافتتاحي</th>
+                      <th className="p-2.5">الحالة</th>
+                    </tr>
+                  ) : (
+                    <tr>
+                      <th className="p-2.5 w-10 text-center">اختيار</th>
+                      <th className="p-2.5 text-center">نشط</th>
+                      <th className="p-2.5">الاسم</th>
+                      <th className="p-2.5">الرقم</th>
+                      <th className="p-2.5">تيلفون 1</th>
+                      <th className="p-2.5">الرصيد</th>
+                      <th className="p-2.5">العملة</th>
+                      <th className="p-2.5">حد الائتمان</th>
+                      <th className="p-2.5">المجموعة</th>
+                      <th className="p-2.5">آخر تعامل</th>
+                      <th className="p-2.5">سجل الاستيراد</th>
+                    </tr>
+                  )}
                 </thead>
                 <tbody className="divide-y divide-slate-800/80">
                   {partnerType === 'customers'
@@ -1302,22 +1497,61 @@ export const ImportPartnersModal: React.FC<ImportPartnersModalProps> = ({
                                 className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4 bg-slate-850 border-slate-700"
                               />
                             </td>
-                            <td className="p-2.5 font-bold text-white">
+                            <td className="p-2.5 text-center">
+                              {row.mapped.isActive !== false ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                  نشط
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                  معطل
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-2.5 font-bold text-white whitespace-nowrap">
                               {row.mapped.name || <span className="text-rose-400 font-normal">اسم مفقود</span>}
+                              {row.mapped.company && (
+                                <div className="text-[10px] text-slate-400 font-normal">{row.mapped.company}</div>
+                              )}
                             </td>
-                            <td className="p-2.5 text-slate-300">
-                              {row.mapped.company || <span className="text-slate-500">-</span>}
+                            <td className="p-2.5 font-mono text-xs text-blue-400 whitespace-nowrap">
+                              {row.mapped.code ? (
+                                <span className="bg-blue-500/10 border border-blue-500/30 px-1.5 py-0.5 rounded text-[11px] font-mono">
+                                  {row.mapped.code}
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">-</span>
+                              )}
                             </td>
-                            <td className="p-2.5 font-mono text-slate-300">
+                            <td className="p-2.5 font-mono text-slate-300 whitespace-nowrap">
                               {row.mapped.phone || <span className="text-slate-500">-</span>}
                             </td>
-                            <td className="p-2.5 text-slate-300 truncate max-w-[140px]">
-                              {row.mapped.address || <span className="text-slate-500">-</span>}
+                            <td className="p-2.5 font-mono font-semibold text-blue-400 whitespace-nowrap">
+                              {formatCurrency(row.mapped.balance || 0, row.mapped.currency || currency)}
                             </td>
-                            <td className="p-2.5 font-mono font-semibold text-blue-400">
-                              {formatCurrency(row.mapped.balance || 0, currency)}
+                            <td className="p-2.5 font-mono text-xs text-amber-400 whitespace-nowrap">
+                              {row.mapped.currency || currency}
                             </td>
-                            <td className="p-2.5">
+                            <td className="p-2.5 font-mono text-xs text-slate-300 whitespace-nowrap">
+                              {row.mapped.creditLimit !== undefined && row.mapped.creditLimit !== null ? (
+                                formatCurrency(row.mapped.creditLimit, row.mapped.currency || currency)
+                              ) : (
+                                <span className="text-slate-500">-</span>
+                              )}
+                            </td>
+                            <td className="p-2.5 whitespace-nowrap">
+                              {row.mapped.group ? (
+                                <span className="bg-purple-500/10 text-purple-300 border border-purple-500/20 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                                  {row.mapped.group}
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">-</span>
+                              )}
+                            </td>
+                            <td className="p-2.5 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                              {row.mapped.lastTransactionDate || <span className="text-slate-500">-</span>}
+                            </td>
+                            <td className="p-2.5 whitespace-nowrap">
                               {row.hasErrors ? (
                                 <span className="bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold">
                                   {row.errorMessages.join(', ')}

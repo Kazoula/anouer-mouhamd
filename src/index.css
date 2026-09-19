@@ -98,47 +98,53 @@ html.light .close-circle-btn:active {
 }
 
 /* =========================================================
-   LOW STOCK BANNER TYPOGRAPHY (WHITE IN DARK, BLACK IN LIGHT)
+   LOW STOCK BANNER TYPOGRAPHY (BLACK IN LIGHT, WHITE IN DARK)
    ========================================================= */
 .stock-alert-title {
-  color: #ffffff !important;
+  color: #000000 !important;
 }
 
 .stock-alert-desc {
-  color: #f1f5f9 !important;
+  color: #000000 !important;
 }
 
 .stock-alert-action {
-  color: #ffffff !important;
+  color: #000000 !important;
 }
 
 html.dark .stock-alert-title,
-.dark .stock-alert-title {
+.dark .stock-alert-title,
+[data-theme="dark"] .stock-alert-title {
   color: #ffffff !important;
 }
 
 html.dark .stock-alert-desc,
-.dark .stock-alert-desc {
-  color: #f1f5f9 !important;
+.dark .stock-alert-desc,
+[data-theme="dark"] .stock-alert-desc {
+  color: #ffffff !important;
 }
 
 html.dark .stock-alert-action,
-.dark .stock-alert-action {
+.dark .stock-alert-action,
+[data-theme="dark"] .stock-alert-action {
   color: #ffffff !important;
 }
 
 html.light .stock-alert-title,
-.light .stock-alert-title {
+.light .stock-alert-title,
+[data-theme="light"] .stock-alert-title {
   color: #000000 !important;
 }
 
 html.light .stock-alert-desc,
-.light .stock-alert-desc {
+.light .stock-alert-desc,
+[data-theme="light"] .stock-alert-desc {
   color: #000000 !important;
 }
 
 html.light .stock-alert-action,
-.light .stock-alert-action {
+.light .stock-alert-action,
+[data-theme="light"] .stock-alert-action {
   color: #000000 !important;
 }
 

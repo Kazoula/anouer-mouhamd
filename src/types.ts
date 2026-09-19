@@ -25,27 +25,37 @@ export interface Product {
 
 export interface Supplier {
   id: string;
+  code?: string; // الرقم / كود المورد
   name: string;
   phone: string;
+  phone2?: string;
   company?: string;
+  group?: string; // المجموعة / فئة المورد
+  currency?: string; // العملة
   address?: string;
   balance: number; // positive = we owe them (creditor), negative = they owe us
   creditLimit?: number; // حد الإئتمان
   lastTransactionDate?: string; // آخر تعامل
   isActive?: boolean; // نشط (افتراضياً true)
+  notes?: string;
   createdAt: string;
 }
 
 export interface Customer {
   id: string;
+  code?: string; // الرقم / كود العميل
   name: string;
   phone: string;
+  phone2?: string;
   company?: string;
+  group?: string; // المجموعة / فئة العميل
+  currency?: string; // العملة
   address?: string;
   balance: number; // positive = they owe us (debtor), negative = paid in advance
   creditLimit?: number; // حد الإئتمان
   lastTransactionDate?: string; // آخر تعامل
   isActive?: boolean; // نشط (افتراضياً true)
+  notes?: string; // ملاحظات أو معلومات إضافية
   createdAt: string;
 }
 
