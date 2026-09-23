@@ -78,7 +78,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const recentSales = sales.slice(0, 5);
 
   return (
-    <div className="space-y-3.5 sm:space-y-5 p-3 sm:p-4 pb-24 max-w-4xl mx-auto">
+    <div className="space-y-3.5 sm:space-y-5 p-3 sm:p-4 pb-32 sm:pb-36 max-w-4xl mx-auto">
       {/* Primary Quick Actions Window (Shown at Top within Phone Boundaries) */}
       <div 
         id="home-quick-actions-window"

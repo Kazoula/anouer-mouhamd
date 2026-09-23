@@ -193,3 +193,42 @@ export const normalizeProductUnits = (prod: Product): Product => {
 
   return prod;
 };
+
+/**
+ * Helper to ensure a unit name is cleanly prefixed with the Arabic definite article 'ال'
+ * without duplicate prefixes (e.g., 'كرتونة' -> 'الكرتونة', 'الكرتونة' -> 'الكرتونة').
+ */
+export const getUnitWithAl = (unitName?: string, defaultUnit: string = 'قطعة'): string => {
+  const clean = (unitName || defaultUnit).trim();
+  if (!clean) return `ال${defaultUnit}`;
+  if (clean.startsWith('ال-') || clean.startsWith('الـ')) {
+    return clean;
+  }
+  if (clean.startsWith('ال') && clean.length > 2) {
+    return clean;
+  }
+  return `ال${clean}`;
+};
+
+/**
+ * Returns the dynamic label for minor piece price inside major unit:
+ * e.g., "سعر القطعة داخل الكرتونة" or "سعر القطعة داخل الصندوق"
+ */
+export const getPieceInsideMajorTitle = (minorUnit?: string, majorUnit?: string): string => {
+  const minorWithAl = getUnitWithAl(minorUnit, 'قطعة');
+  const majorWithAl = getUnitWithAl(majorUnit, 'كرتونة');
+  return `سعر ${minorWithAl} داخل ${majorWithAl}`;
+};
+
+/**
+ * Calculates the unit sale price per 1 piece inside the major package:
+ * Formula: salePriceMajor / piecesPerMajorUnit
+ */
+export const calculatePiecePriceInsideMajor = (
+  salePriceMajor: number,
+  piecesPerMajorUnit: number
+): number => {
+  const pieces = Number(piecesPerMajorUnit) || 1;
+  if (pieces <= 0) return 0;
+  return (Number(salePriceMajor) || 0) / pieces;
+};

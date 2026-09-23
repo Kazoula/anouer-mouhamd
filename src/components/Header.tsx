@@ -43,7 +43,13 @@ export const Header: React.FC<HeaderProps> = ({
   const lowStockCount = products.filter(p => p.stockPieces <= p.minStockAlert).length;
 
   return (
-    <header className="sticky top-0 z-30 bg-slate-900/90 dark:bg-black/90 backdrop-blur-2xl border-b border-purple-500/20 dark:border-white/10 text-white px-2.5 sm:px-4 py-2 sm:py-3 shadow-md w-full overflow-hidden">
+    <header 
+      id="top-main-header"
+      className="sticky top-0 z-50 bg-slate-900/95 dark:bg-black/95 backdrop-blur-2xl border-b border-purple-500/20 dark:border-white/10 text-white px-2.5 sm:px-4 py-2.5 sm:py-3.5 shadow-md w-full shrink-0"
+      style={{
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.625rem)',
+      }}
+    >
       <div className="flex items-center justify-between max-w-4xl mx-auto w-full gap-1.5 sm:gap-2">
         {/* Brand & Logo - Crystal Mauve Prism */}
         <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">

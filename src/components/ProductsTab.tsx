@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { 
   Plus, 
   Minus,
@@ -25,14 +25,33 @@ import {
   ChevronsLeft,
   Layers,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  Calculator,
+  Palette,
+  Maximize2
 } from 'lucide-react';
 import { Product, Supplier, StockMovement } from '../types';
 import { formatCurrency, formatStockUnits, formatArabicDateTime } from '../utils/calculations';
-import { isDualUnitProduct, getPrimaryUnit, normalizeProductUnits } from '../utils/unitHelpers';
+import { 
+  isDualUnitProduct, 
+  getPrimaryUnit, 
+  normalizeProductUnits,
+  getPieceInsideMajorTitle,
+  calculatePiecePriceInsideMajor,
+  getUnitWithAl
+} from '../utils/unitHelpers';
 import { soundEffects } from '../utils/soundEffects';
 import { ImportProductsModal } from './ImportProductsModal';
-import { classifyProductCategory, STORE_CATEGORY_NAMES } from '../utils/categoryClassifier';
+import { 
+  classifyProductCategory, 
+  STORE_CATEGORY_NAMES, 
+  getStoredCustomCategories, 
+  saveStoredCustomCategories,
+  CATEGORY_COLOR_PRESETS,
+  getStoredCategoryColors,
+  saveStoredCategoryColors,
+  getCategoryColorPreset
+} from '../utils/categoryClassifier';
 import { repairAndClassifyProduct } from '../utils/storage';
 import { filterAndRankProducts, extractSearchTokens } from '../utils/searchHelpers';
 import { HighlightedProductName } from './SearchableProductSelect';
@@ -116,6 +135,102 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
   const [quickCategoryProduct, setQuickCategoryProduct] = useState<Product | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
+  // Available Store Categories state (supports live edit & delete)
+  const [customCategories, setCustomCategories] = useState<string[]>(() => getStoredCustomCategories());
+  const [categoryColors, setCategoryColors] = useState<Record<string, string>>(() => getStoredCategoryColors());
+  const [editingCategoryKey, setEditingCategoryKey] = useState<string | null>(null);
+  const [editingCategoryValue, setEditingCategoryValue] = useState<string>('');
+  const [editingCategoryColor, setEditingCategoryColor] = useState<string>('emerald');
+  const [isColorPickerOpen, setIsColorPickerOpen] = useState<string | null>(null);
+  const [deletingCategoryTarget, setDeletingCategoryTarget] = useState<string | null>(null);
+
+  // New Category Creation state
+  const [isAddingNewCategory, setIsAddingNewCategory] = useState<boolean>(false);
+  const [newCategoryName, setNewCategoryName] = useState<string>('');
+  const [newCategoryColor, setNewCategoryColor] = useState<string>('emerald');
+
+  // Quick Category Modal Resizable state (Free horizontal & vertical scaling)
+  const [modalSize, setModalSize] = useState<{ width: number; height: number }>({ width: 560, height: 620 });
+  const [isResizing, setIsResizing] = useState<boolean>(false);
+  const resizeRef = useRef<{
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+    direction: 'e' | 'w' | 's' | 'se' | 'sw' | null;
+  }>({
+    startX: 0,
+    startY: 0,
+    startWidth: 560,
+    startHeight: 620,
+    direction: null,
+  });
+
+  const handleResizeStart = (e: React.MouseEvent, direction: 'e' | 'w' | 's' | 'se' | 'sw') => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    resizeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startWidth: modalSize.width,
+      startHeight: modalSize.height,
+      direction,
+    };
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const { startX, startY, startWidth, startHeight, direction } = resizeRef.current;
+      if (!direction) return;
+
+      const deltaX = e.clientX - startX;
+      const deltaY = e.clientY - startY;
+
+      // Calculate maximum bounds based on window viewport
+      const maxWidth = Math.max(500, window.innerWidth - 32);
+      const maxHeight = Math.max(480, window.innerHeight - 32);
+      const minWidth = 460;
+      const minHeight = 440;
+
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+
+      if (direction === 'e') {
+        // Dragging right border: modal is centered so deltaX * 2 for symmetric or 1.5
+        newWidth = Math.min(maxWidth, Math.max(minWidth, startWidth + deltaX * 2));
+      } else if (direction === 'w') {
+        // Dragging left border: deltaX is negative when expanding left
+        newWidth = Math.min(maxWidth, Math.max(minWidth, startWidth - deltaX * 2));
+      } else if (direction === 's') {
+        // Dragging bottom edge: expand downwards
+        newHeight = Math.min(maxHeight, Math.max(minHeight, startHeight + deltaY));
+      } else if (direction === 'se') {
+        newWidth = Math.min(maxWidth, Math.max(minWidth, startWidth + deltaX * 2));
+        newHeight = Math.min(maxHeight, Math.max(minHeight, startHeight + deltaY));
+      } else if (direction === 'sw') {
+        newWidth = Math.min(maxWidth, Math.max(minWidth, startWidth - deltaX * 2));
+        newHeight = Math.min(maxHeight, Math.max(minHeight, startHeight + deltaY));
+      }
+
+      setModalSize({ width: Math.round(newWidth), height: Math.round(newHeight) });
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      resizeRef.current.direction = null;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
   // Auto-Repair and Organize on mount if products need classification
   useEffect(() => {
     if (products.length === 0) return;
@@ -136,8 +251,12 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
     }
   }, [products.length]);
 
-  // Extract unique categories (Memoized)
-  const categories = useMemo(() => ['all', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))], [products]);
+  // Extract unique categories (Memoized: includes customCategories so newly added categories show up immediately)
+  const categories = useMemo(() => {
+    const fromProducts = products.map(p => p.category).filter(Boolean);
+    const combined = Array.from(new Set([...customCategories, ...fromProducts]));
+    return ['all', ...combined];
+  }, [products, customCategories]);
 
   // Auto Organize All Products into their correct departments
   const handleAutoOrganizeCategories = () => {
@@ -171,6 +290,130 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
     soundEffects.success();
     setSuccessToast(`تم نقل "${product.name}" إلى قسم "${newCategory}" بنجاح.`);
     setTimeout(() => setSuccessToast(null), 3000);
+  };
+
+  // Start editing a category name & color
+  const handleStartEditCategory = (e: React.MouseEvent, catName: string) => {
+    e.stopPropagation();
+    setEditingCategoryKey(catName);
+    setEditingCategoryValue(catName);
+    setEditingCategoryColor(categoryColors[catName] || 'emerald');
+    setIsColorPickerOpen(null);
+  };
+
+  // Save the updated category name & color and update all associated products
+  const handleSaveEditedCategory = (oldName: string) => {
+    const trimmedNew = editingCategoryValue.trim();
+    if (!trimmedNew) {
+      setEditingCategoryKey(null);
+      return;
+    }
+
+    // 1. Update customCategories list
+    const updatedCategories = customCategories.map(c => c === oldName ? trimmedNew : c);
+    setCustomCategories(updatedCategories);
+    saveStoredCustomCategories(updatedCategories);
+
+    // 2. Update category color mapping
+    const updatedColors = { ...categoryColors };
+    if (oldName !== trimmedNew) {
+      delete updatedColors[oldName];
+    }
+    updatedColors[trimmedNew] = editingCategoryColor;
+    setCategoryColors(updatedColors);
+    saveStoredCategoryColors(updatedColors);
+
+    // 3. Update products that were under oldName
+    if (oldName !== trimmedNew) {
+      const affectedProducts = products.filter(p => p.category === oldName);
+      if (affectedProducts.length > 0) {
+        const updatedProducts = products.map(p => p.category === oldName ? { ...p, category: trimmedNew } : p);
+        onBulkImport(updatedProducts, 'update');
+      }
+
+      // If currently selected category was oldName, update it
+      if (selectedCategory === oldName) {
+        setSelectedCategory(trimmedNew);
+      }
+    }
+
+    setEditingCategoryKey(null);
+    soundEffects.success();
+    setSuccessToast(`تم حفظ تعديلات قسم "${trimmedNew}" بنجاح.`);
+    setTimeout(() => setSuccessToast(null), 3500);
+  };
+
+  // Quick Change color directly for a category
+  const handleChangeCategoryColor = (catName: string, colorId: string) => {
+    const updatedColors = { ...categoryColors, [catName]: colorId };
+    setCategoryColors(updatedColors);
+    saveStoredCategoryColors(updatedColors);
+    setIsColorPickerOpen(null);
+    soundEffects.beep();
+    setSuccessToast(`تم تغيير لون قسم "${catName}".`);
+    setTimeout(() => setSuccessToast(null), 2500);
+  };
+
+  // Add a brand-new custom category
+  const handleAddNewCategory = () => {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) return;
+
+    if (customCategories.includes(trimmed)) {
+      soundEffects.beep();
+      setSuccessToast(`القسم "${trimmed}" موجود بالفعل!`);
+      setTimeout(() => setSuccessToast(null), 3000);
+      return;
+    }
+
+    const updated = [...customCategories, trimmed];
+    setCustomCategories(updated);
+    saveStoredCustomCategories(updated);
+
+    const updatedColors = { ...categoryColors, [trimmed]: newCategoryColor };
+    setCategoryColors(updatedColors);
+    saveStoredCategoryColors(updatedColors);
+
+    setNewCategoryName('');
+    setIsAddingNewCategory(false);
+    soundEffects.success();
+    setSuccessToast(`تمت إضافة قسم "${trimmed}" الجديد بنجاح.`);
+    setTimeout(() => setSuccessToast(null), 3500);
+  };
+
+  // Confirm delete category and move its products to (غير مصنف)
+  const handleConfirmDeleteCategory = (targetCat: string) => {
+    // 1. Remove category from custom categories list
+    const updatedCategories = customCategories.filter(c => c !== targetCat);
+    setCustomCategories(updatedCategories);
+    saveStoredCustomCategories(updatedCategories);
+
+    // 2. Remove color mapping
+    const updatedColors = { ...categoryColors };
+    delete updatedColors[targetCat];
+    setCategoryColors(updatedColors);
+    saveStoredCategoryColors(updatedColors);
+
+    // 3. Transfer all products in this category to 'غير مصنف'
+    const affectedProducts = products.filter(p => p.category === targetCat);
+    if (affectedProducts.length > 0) {
+      const updatedProducts = products.map(p => p.category === targetCat ? { ...p, category: 'غير مصنف' } : p);
+      onBulkImport(updatedProducts, 'update');
+    }
+
+    // 4. Reset selectedCategory if it was this category
+    if (selectedCategory === targetCat) {
+      setSelectedCategory('all');
+    }
+
+    setDeletingCategoryTarget(null);
+    soundEffects.beep();
+    setSuccessToast(
+      affectedProducts.length > 0
+        ? `تم حذف قسم "${targetCat}" ونقل ${affectedProducts.length} صنف إلى (غير مصنف).`
+        : `تم حذف قسم "${targetCat}" بنجاح.`
+    );
+    setTimeout(() => setSuccessToast(null), 3500);
   };
 
   // Search tokens for visual chips
@@ -370,7 +613,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
     : [];
 
   return (
-    <div className="space-y-4 pb-20 pt-2 px-3 sm:px-4">
+    <div className="space-y-4 pb-32 sm:pb-36 pt-2 px-3 sm:px-4">
       {/* Top Header with Search, Import Sheet, and New Product Buttons */}
       <div>
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
@@ -480,19 +723,33 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
             </button>
           )}
 
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-xl font-semibold border transition-all whitespace-nowrap ${
-                selectedCategory === cat
-                  ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300'
-                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {cat === 'all' ? 'جميع الأصناف' : cat}
-            </button>
-          ))}
+          {categories.map((cat) => {
+            const isAll = cat === 'all';
+            const isSelected = selectedCategory === cat;
+            const colorId = categoryColors[cat] || (cat === 'بسكويت وحلويات' ? 'emerald' : cat === 'شوكولاتة وسناكات' ? 'amber' : 'sky');
+            const preset = getCategoryColorPreset(colorId);
+
+            return (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-xl font-bold border transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                  isSelected
+                    ? isAll 
+                      ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300 shadow-sm'
+                      : `${preset.bg} ${preset.border} ${preset.text} shadow-sm ring-1 ring-white/10`
+                    : isAll
+                      ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                      : 'bg-slate-800/90 border-slate-700/80 text-slate-300 hover:text-white hover:border-slate-600'
+                }`}
+              >
+                {!isAll && (
+                  <span className={`w-2 h-2 rounded-full ${preset.dot} shrink-0`} />
+                )}
+                <span>{isAll ? 'جميع الأصناف' : cat}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -648,10 +905,20 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                       <button
                         type="button"
                         onClick={() => setQuickCategoryProduct(product)}
-                        className="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md font-bold text-[11px] flex items-center gap-1 transition-all active:scale-95"
-                        title="نقر لتغيير القسم فوراً"
+                        className={`${
+                          product.category && categoryColors[product.category]
+                            ? getCategoryColorPreset(categoryColors[product.category]).chip
+                            : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border-emerald-500/30'
+                        } border px-2 py-0.5 rounded-md font-bold text-[11px] flex items-center gap-1.5 transition-all active:scale-95 shadow-xs`}
+                        title="نقر لتغيير أو تعديل القسم فوراً"
                       >
-                        <Layers className="w-3 h-3 text-emerald-400" />
+                        <span 
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            product.category && categoryColors[product.category]
+                              ? getCategoryColorPreset(categoryColors[product.category]).dot
+                              : 'bg-emerald-400'
+                          }`} 
+                        />
                         <span>{product.category || 'عام'}</span>
                       </button>
                       {product.notes && (
@@ -777,6 +1044,26 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                       <div className="text-slate-300 dark:text-slate-300 font-medium text-xs">
                         بالـ{product.majorUnit}: <span className="font-bold text-slate-100 dark:text-slate-100">{formatCurrency(product.salePriceMajor, currency)}</span>
                       </div>
+
+                      {/* Dynamic Explanatory Field: Piece price inside major unit */}
+                      {product.piecesPerMajorUnit > 1 && (
+                        <div className="mt-2 pt-1.5 border-t border-slate-750 dark:border-slate-800/80">
+                          <div className="bg-amber-500/15 dark:bg-amber-950/30 border border-amber-500/35 rounded-lg px-2 py-1.5 shadow-2xs">
+                            <div className="flex items-center justify-between gap-1 text-[11px] flex-wrap">
+                              <span className="text-amber-300 dark:text-amber-200 font-bold flex items-center gap-1">
+                                <Calculator className="w-3 h-3 text-amber-400 shrink-0" />
+                                <span>{getPieceInsideMajorTitle(product.minorUnit, product.majorUnit)}:</span>
+                              </span>
+                              <span className="font-mono font-black text-amber-300 dark:text-amber-200 text-xs">
+                                {formatCurrency(calculatePiecePriceInsideMajor(product.salePriceMajor, product.piecesPerMajorUnit), currency)}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-white dark:text-white font-mono font-medium mt-0.5 text-left flex items-center justify-between" dir="ltr">
+                              <span className="text-white dark:text-white">({formatCurrency(product.salePriceMajor, currency)} ÷ {product.piecesPerMajorUnit} {product.minorUnit})</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -974,7 +1261,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                     </button>
                   </div>
                   <datalist id="category-suggestions">
-                    {STORE_CATEGORY_NAMES.map(c => (
+                    {customCategories.map(c => (
                       <option key={c} value={c} />
                     ))}
                   </datalist>
@@ -1234,6 +1521,24 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                         className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-white font-bold focus:outline-none focus:border-emerald-500"
                       />
                     </div>
+
+                    {/* Dynamic Explanatory calculation guidance in Edit Modal */}
+                    {Number(formData.piecesPerMajorUnit) > 1 && (
+                      <div className="col-span-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 mt-1">
+                        <div className="flex items-center justify-between text-xs flex-wrap gap-1">
+                          <span className="text-amber-300 font-bold flex items-center gap-1.5">
+                            <Calculator className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>{getPieceInsideMajorTitle(formData.minorUnit, formData.majorUnit)}:</span>
+                          </span>
+                          <span className="font-mono font-black text-amber-300 text-sm">
+                            {formatCurrency(calculatePiecePriceInsideMajor(Number(formData.salePriceMajor) || 0, Number(formData.piecesPerMajorUnit) || 1), currency)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-white dark:text-white mt-1">
+                          معادلة الحساب الإرشادية: سعر بيع {getUnitWithAl(formData.majorUnit, 'كرتونة')} ({formatCurrency(Number(formData.salePriceMajor) || 0, currency)}) ÷ {formData.piecesPerMajorUnit || 1} {formData.minorUnit || 'قطعة'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div>
@@ -1720,40 +2025,111 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
         </div>
       )}
 
-      {/* Quick Category Selector Modal */}
+      {/* Quick Category Selector Modal (Resizable Free Sizing) */}
       {quickCategoryProduct && (
         <div 
-          onClick={() => setQuickCategoryProduct(null)}
+          onClick={() => {
+            setQuickCategoryProduct(null);
+            setIsColorPickerOpen(null);
+            setIsAddingNewCategory(false);
+            setEditingCategoryKey(null);
+          }}
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 animate-in fade-in"
         >
           <div 
-            onClick={(e) => e.stopPropagation()}
-            className="bg-slate-900 border border-emerald-500/40 rounded-3xl w-full max-w-md p-5 shadow-2xl text-slate-100 animate-in zoom-in-95"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsColorPickerOpen(null);
+            }}
+            style={{
+              width: `${modalSize.width}px`,
+              height: `${modalSize.height}px`,
+              minWidth: '460px',
+              minHeight: '440px',
+              maxWidth: 'calc(100vw - 24px)',
+              maxHeight: 'calc(100vh - 24px)',
+            }}
+            className="group/modal relative bg-slate-900 border-2 border-emerald-500/50 rounded-3xl p-5 shadow-2xl text-slate-100 animate-in zoom-in-95 flex flex-col select-none overflow-hidden transition-[box-shadow] hover:border-emerald-400/70"
           >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+            {/* Edge & Corner Resize Handles with visual indicators */}
+            {/* Right edge */}
+            <div 
+              onMouseDown={(e) => handleResizeStart(e, 'e')}
+              className="absolute top-4 bottom-4 right-0 w-2.5 cursor-ew-resize hover:bg-emerald-500/40 active:bg-emerald-400 z-50 transition-colors"
+              title="سحب لتغيير العرض"
+            />
+            {/* Left edge */}
+            <div 
+              onMouseDown={(e) => handleResizeStart(e, 'w')}
+              className="absolute top-4 bottom-4 left-0 w-2.5 cursor-ew-resize hover:bg-emerald-500/40 active:bg-emerald-400 z-50 transition-colors"
+              title="سحب لتغيير العرض"
+            />
+            {/* Bottom edge */}
+            <div 
+              onMouseDown={(e) => handleResizeStart(e, 's')}
+              className="absolute bottom-0 left-4 right-4 h-2.5 cursor-ns-resize hover:bg-emerald-500/40 active:bg-emerald-400 z-50 transition-colors"
+              title="سحب لتغيير الارتفاع"
+            />
+            {/* Bottom-Right Corner */}
+            <div 
+              onMouseDown={(e) => handleResizeStart(e, 'se')}
+              className="absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize hover:bg-emerald-500/50 active:bg-emerald-400 rounded-br-2xl z-50 flex items-end justify-end p-1 transition-colors"
+              title="سحب لتغيير الحجم حراً (عرض وارتفاع)"
+            >
+              <div className="w-2.5 h-2.5 border-r-2 border-b-2 border-emerald-400/80 rounded-br-sm pointer-events-none" />
+            </div>
+            {/* Bottom-Left Corner */}
+            <div 
+              onMouseDown={(e) => handleResizeStart(e, 'sw')}
+              className="absolute bottom-0 left-0 w-5 h-5 cursor-nesw-resize hover:bg-emerald-500/50 active:bg-emerald-400 rounded-bl-2xl z-50 flex items-end justify-start p-1 transition-colors"
+              title="سحب لتغيير الحجم حراً (عرض وارتفاع)"
+            >
+              <div className="w-2.5 h-2.5 border-l-2 border-b-2 border-emerald-400/80 rounded-bl-sm pointer-events-none" />
+            </div>
+
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
                   <Layers className="w-4 h-4" />
                 </div>
-                <div>
-                  <h4 className="font-bold text-white text-sm">تحديد قسم الصنف</h4>
-                  <p className="text-[11px] text-slate-400 truncate max-w-[260px]">{quickCategoryProduct.name}</p>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-white text-sm">تحديد قسم الصنف</h4>
+                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700/60">
+                      <Maximize2 className="w-2.5 h-2.5 text-emerald-400" />
+                      <span>قابلة لتغيير الحجم</span>
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate max-w-[280px]">{quickCategoryProduct.name}</p>
                 </div>
               </div>
-              <button
-                onClick={() => setQuickCategoryProduct(null)}
-                className="close-circle-btn"
-                title="إغلاق"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                {/* Reset Size Button */}
+                {(modalSize.width !== 560 || modalSize.height !== 620) && (
+                  <button
+                    type="button"
+                    onClick={() => setModalSize({ width: 560, height: 620 })}
+                    className="text-[10px] text-slate-400 hover:text-emerald-300 bg-slate-800/80 hover:bg-slate-800 px-2 py-1 rounded-lg border border-slate-700 transition-all font-semibold"
+                    title="استعادة الحجم الافتراضي"
+                  >
+                    استعادة الحجم
+                  </button>
+                )}
+                <button
+                  onClick={() => setQuickCategoryProduct(null)}
+                  className="close-circle-btn"
+                  title="إغلاق"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Smart Recommendation Chip */}
             {(() => {
               const suggested = classifyProductCategory(quickCategoryProduct.name);
               return (
-                <div className="mb-4 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between gap-2">
+                <div className="mb-4 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between gap-2 shrink-0">
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
                     <div>
@@ -1772,25 +2148,318 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
               );
             })()}
 
-            <p className="text-xs font-semibold text-slate-400 mb-2">أو اختر القسم من الأقسام التالية:</p>
-            <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1">
-              {STORE_CATEGORY_NAMES.map(cat => (
+            <div className="flex items-center justify-between mb-2 shrink-0">
+              <p className="text-xs font-semibold text-slate-400">أو اختر القسم من الأقسام التالية:</p>
+              {!isAddingNewCategory && (
                 <button
-                  key={cat}
                   type="button"
-                  onClick={() => handleQuickUpdateCategory(quickCategoryProduct, cat)}
-                  className={`p-2.5 rounded-xl text-right text-xs font-bold border transition-all flex items-center justify-between active:scale-95 ${
-                    quickCategoryProduct.category === cat
-                      ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300 shadow'
-                      : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700/80 text-slate-300 hover:text-white'
-                  }`}
+                  onClick={() => {
+                    setIsAddingNewCategory(true);
+                    setNewCategoryName('');
+                    setNewCategoryColor('emerald');
+                  }}
+                  className="text-emerald-400 hover:text-emerald-300 font-bold text-xs flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 rounded-xl transition-all active:scale-95 shadow-sm"
                 >
-                  <span className="truncate">{cat}</span>
-                  {quickCategoryProduct.category === cat && (
-                    <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  )}
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ إضافة مجموعة جديدة</span>
                 </button>
-              ))}
+              )}
+            </div>
+
+            {/* Inline Add New Category Box */}
+            {isAddingNewCategory && (
+              <div className="mb-3 p-3 bg-slate-800/90 border border-emerald-500/50 rounded-2xl animate-in fade-in slide-in-from-top-2 shrink-0">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                    <Plus className="w-4 h-4 text-emerald-400" />
+                    <span>إضافة مجموعة جديدة</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingNewCategory(false)}
+                    className="text-slate-400 hover:text-white p-1 rounded-lg"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddNewCategory();
+                      } else if (e.key === 'Escape') {
+                        setIsAddingNewCategory(false);
+                      }
+                    }}
+                    autoFocus
+                    placeholder="اكتب اسم المجموعة (مثال: مثلجات وأيس كريم)..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddNewCategory}
+                    disabled={!newCategoryName.trim()}
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl shadow-md transition-all shrink-0 active:scale-95"
+                  >
+                    حفظ المجموعة
+                  </button>
+                </div>
+
+                {/* Color Selector Pills for New Category */}
+                <div className="flex items-center gap-1.5 pt-1 overflow-x-auto no-scrollbar">
+                  <span className="text-[11px] text-slate-400 shrink-0 font-medium ml-1">لون التمييز:</span>
+                  {CATEGORY_COLOR_PRESETS.map((preset) => {
+                    const isSelected = newCategoryColor === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => setNewCategoryColor(preset.id)}
+                        className={`w-6 h-6 rounded-full ${preset.dot} transition-transform flex items-center justify-center shrink-0 ${
+                          isSelected ? 'ring-2 ring-white scale-110 shadow-md' : 'opacity-70 hover:opacity-100 hover:scale-105'
+                        }`}
+                        title={preset.label}
+                      >
+                        {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Responsive Categories Grid - Adapts column count as modal width expands */}
+            <div 
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
+              }}
+              className="gap-2.5 overflow-y-auto flex-1 pr-1 pb-2"
+            >
+              {customCategories.map(cat => {
+                const isSelected = quickCategoryProduct.category === cat;
+                const isEditing = editingCategoryKey === cat;
+                const colorId = categoryColors[cat] || (cat === 'بسكويت وحلويات' ? 'emerald' : cat === 'شوكولاتة وسناكات' ? 'amber' : 'sky');
+                const preset = getCategoryColorPreset(colorId);
+                const isColorMenuOpen = isColorPickerOpen === cat;
+
+                if (isEditing) {
+                  return (
+                    <div 
+                      key={cat}
+                      className="col-span-full p-3 rounded-2xl border-2 border-emerald-500 bg-slate-800 shadow-xl"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <input 
+                          type="text"
+                          value={editingCategoryValue}
+                          onChange={(e) => setEditingCategoryValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleSaveEditedCategory(cat);
+                            } else if (e.key === 'Escape') {
+                              setEditingCategoryKey(null);
+                            }
+                          }}
+                          autoFocus
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-blue-500"
+                          placeholder="اسم القسم الجديد..."
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEditedCategory(cat)}
+                          className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shrink-0 active:scale-95 transition-transform font-bold text-xs flex items-center gap-1 shadow-md"
+                          title="حفظ التعديل"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>حفظ</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingCategoryKey(null)}
+                          className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white shrink-0 active:scale-95 transition-transform text-xs"
+                          title="إلغاء التعديل"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Color Picker inside Edit Mode */}
+                      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-2 border-t border-slate-700/70">
+                        <span className="text-[11px] text-slate-400 shrink-0 font-medium ml-1">تحديد اللون:</span>
+                        {CATEGORY_COLOR_PRESETS.map((p) => {
+                          const isCur = editingCategoryColor === p.id;
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => setEditingCategoryColor(p.id)}
+                              className={`w-6 h-6 rounded-full ${p.dot} transition-all flex items-center justify-center shrink-0 ${
+                                isCur ? 'ring-2 ring-white scale-110 shadow-md' : 'opacity-65 hover:opacity-100 hover:scale-105'
+                              }`}
+                              title={p.label}
+                            >
+                              {isCur && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={cat}
+                    onClick={() => handleQuickUpdateCategory(quickCategoryProduct, cat)}
+                    className={`group relative p-2.5 rounded-2xl text-right text-xs font-bold border-2 transition-all flex items-center justify-between cursor-pointer select-none active:scale-[0.98] ${
+                      isSelected
+                        ? `${preset.bg} ${preset.border} ${preset.text} shadow-md ring-2 ring-emerald-400/30`
+                        : 'bg-slate-800/85 hover:bg-slate-800 border-slate-700/80 text-slate-100 hover:border-slate-500'
+                    }`}
+                  >
+                    {/* Action buttons (Left side in RTL = far left): Color Palette 🎨, Edit Pen ✏️, Delete Trash 🗑️ */}
+                    <div 
+                      className="flex items-center gap-1.5 shrink-0 pl-1 order-1 opacity-90 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Delete Icon (Red #EF4444) */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeletingCategoryTarget(cat);
+                        }}
+                        className="p-1.5 rounded-lg text-rose-500 hover:text-white hover:bg-rose-500/25 active:scale-90 transition-all border border-transparent hover:border-rose-500/40"
+                        title="حذف المجموعة"
+                        aria-label="حذف المجموعة"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 stroke-[2.2]" style={{ color: '#EF4444' }} />
+                      </button>
+
+                      {/* Edit Icon (Blue #3B82F6) */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleStartEditCategory(e, cat)}
+                        className="p-1.5 rounded-lg text-blue-400 hover:text-white hover:bg-blue-500/25 active:scale-90 transition-all border border-transparent hover:border-blue-500/40"
+                        title="تعديل اسم المجموعة"
+                        aria-label="تعديل اسم المجموعة"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 stroke-[2.2]" style={{ color: '#3B82F6' }} />
+                      </button>
+
+                      {/* Palette / Color Icon */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsColorPickerOpen(isColorMenuOpen ? null : cat);
+                        }}
+                        className={`p-1.5 rounded-lg transition-all border ${
+                          isColorMenuOpen 
+                            ? 'bg-purple-600 text-white border-purple-400 shadow-sm' 
+                            : 'text-purple-400 hover:text-white hover:bg-purple-500/25 border-transparent hover:border-purple-500/40 active:scale-90'
+                        }`}
+                        title="تغيير لون المجموعة"
+                        aria-label="تغيير لون المجموعة"
+                      >
+                        <Palette className="w-3.5 h-3.5 stroke-[2.2]" />
+                      </button>
+                    </div>
+
+                    {/* Category name & colored dot on the RIGHT (RTL layout: order-2) */}
+                    <div className="flex items-center gap-2 min-w-0 flex-1 justify-end order-2 pr-0.5">
+                      {isSelected && (
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 ml-auto" />
+                      )}
+                      <span className="truncate font-bold text-slate-100">{cat}</span>
+                      <span className={`w-3 h-3 rounded-full ${preset.dot} shrink-0 shadow-sm ring-1 ring-white/20`} />
+                    </div>
+
+                    {/* Quick Floating Color Picker Dropdown Popover */}
+                    {isColorMenuOpen && (
+                      <div 
+                        className="absolute bottom-full left-0 right-0 mb-1.5 z-40 bg-slate-900/95 backdrop-blur-md border border-purple-500/50 rounded-2xl p-2.5 shadow-2xl flex items-center gap-2 flex-wrap justify-center animate-in zoom-in-95"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="text-[11px] text-slate-300 w-full text-center pb-1 font-bold flex items-center justify-center gap-1">
+                          <Palette className="w-3 h-3 text-purple-400" />
+                          <span>اختر لون المجموعة:</span>
+                        </div>
+                        {CATEGORY_COLOR_PRESETS.map((p) => {
+                          const isThisColor = (categoryColors[cat] || 'emerald') === p.id;
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => handleChangeCategoryColor(cat, p.id)}
+                              className={`w-6 h-6 rounded-full ${p.dot} flex items-center justify-center transition-all ${
+                                isThisColor ? 'ring-2 ring-white scale-110 shadow-lg' : 'opacity-70 hover:opacity-100 hover:scale-110'
+                              }`}
+                              title={`${p.label} - انقر للتطبيق فوراً`}
+                            >
+                              {isThisColor && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog for Category Deletion */}
+      {deletingCategoryTarget && (
+        <div 
+          onClick={() => setDeletingCategoryTarget(null)}
+          className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 animate-in fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-rose-500/40 rounded-3xl w-full max-w-sm p-5 shadow-2xl text-slate-100 animate-in zoom-in-95 text-center"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-3">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <h3 className="text-base font-bold text-white mb-2">
+              هل أنت متأكد من حذف هذه المجموعة؟
+            </h3>
+            
+            <p className="text-xs text-slate-300 mb-1">
+              أنت على وشك حذف قسم: <span className="font-bold text-amber-300">"{deletingCategoryTarget}"</span>
+            </p>
+            <p className="text-[11px] text-slate-400 mb-5 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60 leading-relaxed">
+              💡 سيتم تلقائياً نقل كافة الأصناف التابعة لهذه المجموعة إلى قسم <strong className="text-emerald-400 font-bold">"غير مصنف"</strong> حتى لا تفقد أياً من بياناتك ومخزونك.
+            </p>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleConfirmDeleteCategory(deletingCategoryTarget)}
+                className="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 px-3 rounded-xl text-xs shadow-lg shadow-rose-950/40 transition-all active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>نعم، احذف وانقل إلى غير مصنف</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeletingCategoryTarget(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs transition-all border border-slate-700"
+              >
+                إلغاء
+              </button>
             </div>
           </div>
         </div>

@@ -19,7 +19,8 @@ import {
   StoreConfig, 
   OnlineStoreOrder,
   AppPreferences,
-  PartnerPayment
+  PartnerPayment,
+  PartnerSettlement
 } from '../types';
 import { normalizeProductUnits } from '../utils/unitHelpers';
 
@@ -33,6 +34,7 @@ export const COLLECTIONS = {
   SETTINGS: 'settings',
   ONLINE_ORDERS: 'online_orders',
   PAYMENTS: 'payments',
+  SETTLEMENTS: 'settlements',
 };
 
 /**
@@ -808,3 +810,47 @@ export async function getPaymentsFromFirestore(): Promise<PartnerPayment[]> {
   items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   return items;
 }
+
+export function subscribeToSettlements(
+  onUpdate: (settlements: PartnerSettlement[]) => void,
+  onError?: (err: Error) => void
+) {
+  const q = collection(db, COLLECTIONS.SETTLEMENTS);
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const items: PartnerSettlement[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push(docSnap.data() as PartnerSettlement);
+      });
+      items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      onUpdate(items);
+    },
+    (err) => {
+      console.error('Error listening to settlements:', err);
+      onError?.(err);
+    }
+  );
+}
+
+export async function saveSettlementToFirestore(settlement: PartnerSettlement): Promise<void> {
+  const cleaned = cleanForFirestore(settlement);
+  const ref = doc(db, COLLECTIONS.SETTLEMENTS, cleaned.id);
+  await setDoc(ref, cleaned, { merge: true });
+}
+
+export async function deleteSettlementFromFirestore(settlementId: string): Promise<void> {
+  const ref = doc(db, COLLECTIONS.SETTLEMENTS, settlementId);
+  await deleteDoc(ref);
+}
+
+export async function getSettlementsFromFirestore(): Promise<PartnerSettlement[]> {
+  const snapshot = await getDocs(collection(db, COLLECTIONS.SETTLEMENTS));
+  const items: PartnerSettlement[] = [];
+  snapshot.forEach((docSnap) => {
+    items.push(docSnap.data() as PartnerSettlement);
+  });
+  items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return items;
+}
+

@@ -124,6 +124,38 @@
         "currency": { "type": "string", "required": false },
         "updatedAt": { "type": "string", "required": false }
       }
+    },
+    "PartnerPayment": {
+      "collection": "payments",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "receiptNumber": { "type": "string", "required": true },
+        "partnerType": { "type": "string", "required": true },
+        "partnerId": { "type": "string", "required": true },
+        "partnerName": { "type": "string", "required": true },
+        "amount": { "type": "number", "required": true },
+        "date": { "type": "string", "required": true },
+        "paymentMethod": { "type": "string", "required": true },
+        "previousBalance": { "type": "number", "required": true },
+        "newBalance": { "type": "number", "required": true }
+      }
+    },
+    "PartnerSettlement": {
+      "collection": "settlements",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "settlementNumber": { "type": "string", "required": true },
+        "partnerType": { "type": "string", "required": true },
+        "partnerId": { "type": "string", "required": true },
+        "partnerName": { "type": "string", "required": true },
+        "settlementMode": { "type": "string", "required": true },
+        "adjustmentType": { "type": "string", "required": true },
+        "amount": { "type": "number", "required": true },
+        "previousBalance": { "type": "number", "required": true },
+        "newBalance": { "type": "number", "required": true },
+        "reason": { "type": "string", "required": true },
+        "date": { "type": "string", "required": true }
+      }
     }
   }
 }

@@ -226,11 +226,34 @@ export interface PartnerPayment {
   partnerId: string;
   partnerName: string;
   partnerPhone?: string;
+  partnerCode?: string;
   amount: number;
   date: string; // ISO format or YYYY-MM-DDTHH:mm
   paymentMethod: 'cash' | 'card' | 'transfer' | 'check';
+  referenceNumber?: string;
+  bankName?: string;
   previousBalance: number;
   newBalance: number;
   notes?: string;
   createdAt: string;
 }
+
+export interface PartnerSettlement {
+  id: string;
+  settlementNumber: string; // e.g. SET-2026-1042
+  partnerType: 'customer' | 'supplier';
+  partnerId: string;
+  partnerName: string;
+  partnerPhone?: string;
+  partnerCode?: string;
+  settlementMode: 'zero_balance' | 'target_balance' | 'discount' | 'increase_balance' | 'decrease_balance';
+  adjustmentType: 'decrease' | 'increase'; // decrease = خصم/إنقاص الرصيد, increase = إضافة/زيادة الرصيد
+  amount: number; // قيمة مبلغ التسوية (موجب دائماً)
+  previousBalance: number;
+  newBalance: number;
+  reason: string;
+  notes?: string;
+  date: string; // ISO format or YYYY-MM-DDTHH:mm
+  createdAt: string;
+}
+

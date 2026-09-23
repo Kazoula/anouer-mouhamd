@@ -13,7 +13,8 @@ import {
   Boxes,
   Building,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  Wallet
 } from 'lucide-react';
 import { Product, Supplier, PurchaseInvoice, InvoiceItem } from '../types';
 import { formatCurrency, formatStockUnits, formatArabicDateTime } from '../utils/calculations';
@@ -29,6 +30,7 @@ interface PurchasesTabProps {
   onSavePurchase: (purchase: PurchaseInvoice, updateProductPrices: boolean) => void;
   onDeletePurchase?: (purchaseId: string, revertStock: boolean, revertSupplierBalance: boolean) => void;
   onOpenPurchaseInvoiceModal: (invoice: PurchaseInvoice) => void;
+  onOpenPaymentForSupplier?: (supplierIdOrName: string) => void;
   autoOpenNewModal?: boolean;
   prefillProductId?: string;
 }
@@ -41,6 +43,7 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
   onSavePurchase,
   onDeletePurchase,
   onOpenPurchaseInvoiceModal,
+  onOpenPaymentForSupplier,
   autoOpenNewModal = false,
   prefillProductId,
 }) => {
@@ -362,7 +365,7 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
   });
 
   return (
-    <div className="space-y-4 pb-20 pt-2 px-3 sm:px-4">
+    <div className="space-y-4 pb-32 sm:pb-36 pt-2 px-3 sm:px-4">
       {/* Top Action Bar */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
@@ -383,6 +386,18 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
             </button>
           )}
         </div>
+
+        {onOpenPaymentForSupplier && (
+          <button
+            id="purchases-pay-supplier-btn"
+            onClick={() => onOpenPaymentForSupplier('')}
+            className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400 font-bold text-xs sm:text-sm px-3 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md shrink-0 active:scale-95 transition-all"
+            title="تسجيل سند صرف / دفعة لمورد"
+          >
+            <Wallet className="w-4 h-4 text-amber-400" />
+            <span>سند صرف / دفع لمورد</span>
+          </button>
+        )}
 
         <button
           id="new-purchase-invoice-btn"
@@ -463,7 +478,7 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
               </div>
 
               {/* Action Footer */}
-              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/60 mt-1">
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/60 mt-1 gap-1.5 flex-wrap">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -479,17 +494,34 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
                   <span>حذف الفاتورة</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenPurchaseInvoiceModal(purchase);
-                  }}
-                  className="flex items-center gap-1 text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-slate-700 transition-all shadow-sm"
-                >
-                  <Receipt className="w-3.5 h-3.5 text-blue-400" />
-                  <span>عرض وطباعة السند</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {onOpenPaymentForSupplier && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenPaymentForSupplier(purchase.supplierId || purchase.supplierName);
+                      }}
+                      className="flex items-center gap-1 text-amber-300 hover:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-amber-500/30 transition-all shadow-xs"
+                      title="تسجيل سند صرف للمورد"
+                    >
+                      <Wallet className="w-3.5 h-3.5 text-amber-400" />
+                      <span>سداد للمورد</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenPurchaseInvoiceModal(purchase);
+                    }}
+                    className="flex items-center gap-1 text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-slate-700 transition-all shadow-sm"
+                  >
+                    <Receipt className="w-3.5 h-3.5 text-blue-400" />
+                    <span>عرض وطباعة السند</span>
+                  </button>
+                </div>
               </div>
             </div>
           ))

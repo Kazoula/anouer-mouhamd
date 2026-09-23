@@ -8,7 +8,8 @@ import {
   StoreConfig,
   OnlineStoreOrder,
   ThemeMode,
-  PartnerPayment
+  PartnerPayment,
+  PartnerSettlement
 } from '../types';
 import { initialProducts, initialSuppliers, initialCustomers, initialSales, initialPurchases, initialStockMovements } from '../data/mockData';
 import { normalizeProductUnits } from './unitHelpers';
@@ -26,6 +27,7 @@ const STORAGE_KEYS = {
   STORE_CONFIG: 'app_inventory_store_config_v1',
   ONLINE_ORDERS: 'app_inventory_online_orders_v1',
   PAYMENTS: 'app_inventory_payments_v1',
+  SETTLEMENTS: 'app_inventory_settlements_v1',
 };
 
 export const defaultStoreConfig: StoreConfig = {
@@ -243,6 +245,20 @@ export const saveStoredPayments = (payments: PartnerPayment[]) => {
   localStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(payments));
 };
 
+export const getStoredSettlements = (): PartnerSettlement[] => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SETTLEMENTS);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.error('Error loading settlements from storage', e);
+    return [];
+  }
+};
+
+export const saveStoredSettlements = (settlements: PartnerSettlement[]) => {
+  localStorage.setItem(STORAGE_KEYS.SETTLEMENTS, JSON.stringify(settlements));
+};
+
 export const resetAllData = () => {
   localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(initialProducts));
   localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(initialSuppliers));
@@ -260,6 +276,8 @@ export const exportDataBackup = () => {
     sales: getStoredSales(),
     purchases: getStoredPurchases(),
     movements: getStoredMovements(),
+    payments: getStoredPayments(),
+    settlements: getStoredSettlements(),
     currency: getStoredCurrency(),
     exportedAt: new Date().toISOString(),
   };

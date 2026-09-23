@@ -15,7 +15,8 @@ import {
   StoreConfig,
   OnlineStoreOrder,
   ThemeMode,
-  PartnerPayment
+  PartnerPayment,
+  PartnerSettlement
 } from './types';
 import { 
   getStoredProducts, 
@@ -40,6 +41,8 @@ import {
   saveStoredOnlineOrders,
   getStoredPayments,
   saveStoredPayments,
+  getStoredSettlements,
+  saveStoredSettlements,
   resetAllData,
   exportDataBackup
 } from './utils/storage';
@@ -56,6 +59,9 @@ import {
   subscribeToPayments,
   savePaymentToFirestore,
   deletePaymentFromFirestore,
+  subscribeToSettlements,
+  saveSettlementToFirestore,
+  deleteSettlementFromFirestore,
   saveProductToFirestore,
   deleteProductFromFirestore,
   bulkSaveProductsToFirestore,
@@ -104,6 +110,7 @@ export default function App() {
   const [purchases, setPurchases] = useState<PurchaseInvoice[]>(() => getStoredPurchases());
   const [movements, setMovements] = useState<StockMovement[]>(() => getStoredMovements());
   const [payments, setPayments] = useState<PartnerPayment[]>(() => getStoredPayments());
+  const [settlements, setSettlements] = useState<PartnerSettlement[]>(() => getStoredSettlements());
   const [currency, setCurrency] = useState<string>(() => getStoredCurrency());
   const [theme, setTheme] = useState<ThemeMode>(() => getStoredTheme());
   const [storeConfig, setStoreConfig] = useState<StoreConfig>(() => getStoredStoreConfig());
@@ -113,6 +120,7 @@ export default function App() {
   const [cloudUnsyncedLocalCount, setCloudUnsyncedLocalCount] = useState<number>(0);
   const [saleCustomerPrefill, setSaleCustomerPrefill] = useState<string | null>(null);
   const [partnersInitialSubTab, setPartnersInitialSubTab] = useState<'customers' | 'suppliers'>('customers');
+  const [partnerToPayPrefill, setPartnerToPayPrefill] = useState<{ type: 'supplier' | 'customer'; id: string } | null>(null);
 
   // Initialize Firebase Auth & Real-Time Sync Subscriptions
   useEffect(() => {
@@ -123,6 +131,7 @@ export default function App() {
     let unsubPurchases: (() => void) | undefined;
     let unsubMovements: (() => void) | undefined;
     let unsubPayments: (() => void) | undefined;
+    let unsubSettlements: (() => void) | undefined;
     let unsubStoreConfig: (() => void) | undefined;
     let unsubOnlineOrders: (() => void) | undefined;
     let unsubAppPreferences: (() => void) | undefined;
@@ -206,6 +215,13 @@ export default function App() {
           }
         });
 
+        unsubSettlements = subscribeToSettlements((cloudSettlements) => {
+          if (cloudSettlements && cloudSettlements.length > 0) {
+            setSettlements(cloudSettlements);
+            saveStoredSettlements(cloudSettlements);
+          }
+        });
+
         unsubStoreConfig = subscribeToStoreConfig((cloudConfig) => {
           if (cloudConfig) {
             setStoreConfig(cloudConfig);
@@ -254,6 +270,7 @@ export default function App() {
       unsubPurchases?.();
       unsubMovements?.();
       unsubPayments?.();
+      unsubSettlements?.();
       unsubStoreConfig?.();
       unsubOnlineOrders?.();
       unsubAppPreferences?.();
@@ -1095,6 +1112,79 @@ export default function App() {
     deletePaymentFromFirestore(paymentId).catch(console.error);
   };
 
+  // Financial Settlement Handlers (التسوية المالية للعملاء والموردين)
+  const handleSaveSettlement = (settlement: PartnerSettlement) => {
+    setSettlements(prev => {
+      const updated = [settlement, ...prev.filter(s => s.id !== settlement.id)];
+      saveStoredSettlements(updated);
+      return updated;
+    });
+    saveSettlementToFirestore(settlement).catch(console.error);
+
+    const settlementDateStr = settlement.date ? (settlement.date.includes('T') ? settlement.date.split('T')[0] : settlement.date) : new Date().toISOString().split('T')[0];
+
+    if (settlement.partnerType === 'customer') {
+      setCustomers(prev => prev.map(c => {
+        if (c.id === settlement.partnerId || c.name === settlement.partnerName) {
+          const updatedCust = {
+            ...c,
+            balance: settlement.newBalance,
+            lastTransactionDate: settlementDateStr,
+          };
+          saveCustomerToFirestore(updatedCust).catch(console.error);
+          return updatedCust;
+        }
+        return c;
+      }));
+    } else {
+      setSuppliers(prev => prev.map(s => {
+        if (s.id === settlement.partnerId || s.name === settlement.partnerName) {
+          const updatedSup = {
+            ...s,
+            balance: settlement.newBalance,
+            lastTransactionDate: settlementDateStr,
+          };
+          saveSupplierToFirestore(updatedSup).catch(console.error);
+          return updatedSup;
+        }
+        return s;
+      }));
+    }
+  };
+
+  const handleDeleteSettlement = (settlementId: string) => {
+    const settleToDelete = settlements.find(s => s.id === settlementId);
+    if (!settleToDelete) return;
+
+    // Revert balance to previous recorded balance
+    if (settleToDelete.partnerType === 'customer') {
+      setCustomers(prev => prev.map(c => {
+        if (c.id === settleToDelete.partnerId || c.name === settleToDelete.partnerName) {
+          const updatedCust = { ...c, balance: settleToDelete.previousBalance };
+          saveCustomerToFirestore(updatedCust).catch(console.error);
+          return updatedCust;
+        }
+        return c;
+      }));
+    } else {
+      setSuppliers(prev => prev.map(s => {
+        if (s.id === settleToDelete.partnerId || s.name === settleToDelete.partnerName) {
+          const updatedSup = { ...s, balance: settleToDelete.previousBalance };
+          saveSupplierToFirestore(updatedSup).catch(console.error);
+          return updatedSup;
+        }
+        return s;
+      }));
+    }
+
+    setSettlements(prev => {
+      const updated = prev.filter(s => s.id !== settlementId);
+      saveStoredSettlements(updated);
+      return updated;
+    });
+    deleteSettlementFromFirestore(settlementId).catch(console.error);
+  };
+
   const handleChangeCurrency = (curr: string) => {
     setCurrency(curr);
     setStoredCurrency(curr);
@@ -1309,14 +1399,22 @@ export default function App() {
   const pendingOrdersCount = onlineOrders.filter(o => o.status === 'pending').length;
 
   return (
-    <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-start ${
-      isMobileFrame ? 'p-0 sm:py-8 sm:px-4' : 'p-0'
-    }`}>
+    <div 
+      id="main-layout-container"
+      className={`min-h-screen h-screen w-full bg-slate-950 text-slate-100 flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden ${
+        isMobileFrame ? 'p-0 sm:py-8 sm:px-4' : 'p-0'
+      }`}
+      style={{
+        minHeight: '100vh',
+        height: '100vh',
+        overflowY: 'auto'
+      }}
+    >
       {/* Mobile Shell Container with Crystal Mauve Frame */}
-      <div className={`w-full bg-slate-900 flex flex-col transition-all ${
+      <div className={`w-full bg-slate-900 flex flex-col flex-1 transition-all ${
         isMobileFrame 
-          ? 'max-w-md sm:rounded-[36px] sm:border-[8px] sm:border-purple-950/70 dark:sm:border-zinc-800 sm:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)] sm:overflow-hidden sm:min-h-[840px] relative'
-          : 'max-w-4xl mx-auto min-h-screen'
+          ? 'max-w-md sm:rounded-[36px] sm:border-[8px] sm:border-purple-950/70 dark:sm:border-zinc-800 sm:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)] sm:min-h-[840px] relative'
+          : 'max-w-4xl mx-auto min-h-full relative'
       }`}>
         {/* Top Header */}
         <Header
@@ -1350,7 +1448,7 @@ export default function App() {
         )}
 
         {/* Tab Views */}
-        <main className="flex-1 w-full">
+        <main className="flex-1 w-full pb-32 sm:pb-36">
           {activeTab === 'dashboard' && (
             <DashboardTab
               products={products}
@@ -1434,6 +1532,20 @@ export default function App() {
               onSavePurchase={handleSavePurchase}
               onDeletePurchase={handleDeletePurchase}
               onOpenPurchaseInvoiceModal={(inv) => setSelectedPurchaseForModal(inv)}
+              onOpenPaymentForSupplier={(supIdOrName) => {
+                setPartnersInitialSubTab('suppliers');
+                if (supIdOrName) {
+                  const foundSup = suppliers.find(s => s.id === supIdOrName || s.name === supIdOrName);
+                  if (foundSup) {
+                    setPartnerToPayPrefill({ type: 'supplier', id: foundSup.id });
+                  } else {
+                    setPartnerToPayPrefill(null);
+                  }
+                } else {
+                  setPartnerToPayPrefill(null);
+                }
+                setActiveTab('partners');
+              }}
               prefillProductId={prefillPurchaseProductId}
             />
           )}
@@ -1455,9 +1567,13 @@ export default function App() {
               purchases={purchases}
               currency={currency}
               initialPartnerType={partnersInitialSubTab}
+              partnerToPayPrefill={partnerToPayPrefill}
               payments={payments}
               onRecordPayment={handleSavePayment}
               onDeletePayment={handleDeletePayment}
+              settlements={settlements}
+              onRecordSettlement={handleSaveSettlement}
+              onDeleteSettlement={handleDeleteSettlement}
               onSaveSupplier={handleSaveSupplier}
               onDeleteSupplier={handleDeleteSupplier}
               onSaveCustomer={handleSaveCustomer}

@@ -232,7 +232,7 @@ export const StoreIntegrationTab: React.FC<StoreIntegrationTabProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-12">
+    <div className="space-y-4 pb-32 sm:pb-36">
       {/* Top Banner: Store Status & Quick Stats */}
       <div className="bg-gradient-to-l from-emerald-950/60 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-3xl p-4 sm:p-5 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none -translate-x-1/2 -translate-y-1/2" />

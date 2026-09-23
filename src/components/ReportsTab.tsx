@@ -68,7 +68,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-20 pt-2 px-3 sm:px-4">
+    <div className="space-y-4 pb-32 sm:pb-36 pt-2 px-3 sm:px-4">
       {/* Period Selector Tabs */}
       <div className="bg-slate-850 p-2.5 rounded-2xl border border-slate-800 shadow-md">
         <div className="flex items-center justify-between mb-2">

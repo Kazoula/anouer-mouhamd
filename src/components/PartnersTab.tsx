@@ -31,12 +31,16 @@ import {
   Tag,
   Coins,
   LayoutList,
-  LayoutGrid
+  LayoutGrid,
+  Scale
 } from 'lucide-react';
-import { Supplier, Customer, SaleInvoice, PurchaseInvoice, PartnerPayment } from '../types';
+import { Supplier, Customer, SaleInvoice, PurchaseInvoice, PartnerPayment, PartnerSettlement } from '../types';
 import { formatCurrency, formatArabicDateTime } from '../utils/calculations';
 import { ImportPartnersModal } from './ImportPartnersModal';
 import { PaymentModal } from './PaymentModal';
+import { SupplierPaymentsLedgerModal } from './SupplierPaymentsLedgerModal';
+import { SettlementModal } from './SettlementModal';
+import { SettlementsLedgerModal } from './SettlementsLedgerModal';
 
 interface PartnersTabProps {
   suppliers: Supplier[];
@@ -58,9 +62,13 @@ interface PartnersTabProps {
   onDeleteAllCustomers?: () => Promise<void> | void;
   onDeleteAllPartners?: () => Promise<void> | void;
   initialPartnerType?: 'suppliers' | 'customers';
+  partnerToPayPrefill?: { type: 'supplier' | 'customer'; id: string } | null;
   payments?: PartnerPayment[];
   onRecordPayment?: (payment: PartnerPayment) => void;
   onDeletePayment?: (paymentId: string) => void;
+  settlements?: PartnerSettlement[];
+  onRecordSettlement?: (settlement: PartnerSettlement) => void;
+  onDeleteSettlement?: (settlementId: string) => void;
 }
 
 export const PartnersTab: React.FC<PartnersTabProps> = ({
@@ -83,9 +91,13 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
   onDeleteAllCustomers,
   onDeleteAllPartners,
   initialPartnerType = 'customers',
+  partnerToPayPrefill,
   payments = [],
   onRecordPayment,
   onDeletePayment,
+  settlements = [],
+  onRecordSettlement,
+  onDeleteSettlement,
 }) => {
   const [partnerType, setPartnerType] = useState<'suppliers' | 'customers'>(initialPartnerType);
 
@@ -99,6 +111,35 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
     type: 'customer' | 'supplier';
     data: Customer | Supplier;
   } | null>(null);
+
+  const [isSupplierPaymentModalOpen, setIsSupplierPaymentModalOpen] = useState(false);
+  const [isPaymentsHistoryOpen, setIsPaymentsHistoryOpen] = useState(false);
+
+  // Financial Settlements State
+  const [settlementTarget, setSettlementTarget] = useState<{
+    type: 'customer' | 'supplier';
+    data: Customer | Supplier;
+  } | null>(null);
+  const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
+  const [isSettlementsLedgerModalOpen, setIsSettlementsLedgerModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (partnerToPayPrefill) {
+      if (partnerToPayPrefill.type === 'supplier') {
+        const sup = suppliers.find(s => s.id === partnerToPayPrefill.id);
+        if (sup) {
+          setPartnerType('suppliers');
+          setPaymentTarget({ type: 'supplier', data: sup });
+        }
+      } else {
+        const cust = customers.find(c => c.id === partnerToPayPrefill.id);
+        if (cust) {
+          setPartnerType('customers');
+          setPaymentTarget({ type: 'customer', data: cust });
+        }
+      }
+    }
+  }, [partnerToPayPrefill, suppliers, customers]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -396,7 +437,7 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-20 pt-2 px-3 sm:px-4">
+    <div className="space-y-4 pb-32 sm:pb-36 pt-2 px-3 sm:px-4">
       {/* Type Switcher Tabs */}
       <div className="grid grid-cols-2 gap-2 bg-slate-850 p-1.5 rounded-2xl border border-slate-800">
         <button
@@ -466,6 +507,105 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
               </span>
               <span className="sm:hidden font-bold">حذف الكل</span>
             </button>
+          )}
+
+          {partnerType === 'suppliers' && (
+            <>
+              <button
+                id="supplier-payments-ledger-btn"
+                onClick={() => setIsPaymentsHistoryOpen(true)}
+                className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 font-bold text-xs sm:text-sm px-2.5 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                title="سجل سندات الصرف والمدفوعات لجميع الموردين"
+              >
+                <Receipt className="w-4 h-4 text-amber-400" />
+                <span className="hidden lg:inline">سجل سندات الصرف</span>
+                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-amber-300 font-bold">
+                  {payments.filter((p) => p.partnerType === 'supplier').length}
+                </span>
+              </button>
+
+              <button
+                id="pay-supplier-top-btn"
+                onClick={() => {
+                  setPaymentTarget(null);
+                  setIsSupplierPaymentModalOpen(true);
+                }}
+                className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400 font-bold text-xs sm:text-sm px-3 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
+                title="تسجيل سند صرف جديد (دفع دفعة لمورد)"
+              >
+                <Wallet className="w-4 h-4 text-amber-400" />
+                <span>سند صرف لمورد</span>
+              </button>
+
+              <button
+                id="supplier-settlement-top-btn"
+                onClick={() => {
+                  setSettlementTarget(null);
+                  setIsSettlementModalOpen(true);
+                }}
+                className="bg-black hover:bg-slate-900 text-white border border-slate-750 hover:border-slate-600 font-bold text-xs sm:text-sm px-3 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
+                title="تسوية مالية لمورد (تصفير رصيد / خصم تسوية / مطابقة كشف)"
+              >
+                <Scale className="w-4 h-4 text-white" />
+                <span className="text-white font-bold">تسوية مالية</span>
+              </button>
+
+              <button
+                id="settlements-ledger-top-btn"
+                onClick={() => setIsSettlementsLedgerModalOpen(true)}
+                className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 font-bold text-xs sm:text-sm px-2.5 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                title="سجل التسويات المالية المعتمدة للعملاء والموردين"
+              >
+                <Scale className="w-4 h-4 text-slate-300" />
+                <span className="hidden lg:inline">سجل التسويات</span>
+                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-black border border-slate-700 text-white font-bold">
+                  {settlements.filter((s) => s.partnerType === 'supplier').length}
+                </span>
+              </button>
+            </>
+          )}
+
+          {partnerType === 'customers' && (
+            <>
+              <button
+                id="pay-customer-top-btn"
+                onClick={() => {
+                  setPaymentTarget(null);
+                  setIsSupplierPaymentModalOpen(true);
+                }}
+                className="bg-yellow-400 hover:bg-yellow-300 text-slate-950 border border-yellow-500 font-black text-xs sm:text-sm px-3 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
+                title="تسجيل سند قبض جديد (تحصيل نقدية من عميل)"
+              >
+                <Wallet className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                <span className="text-slate-950 font-black">سند قبض من عميل</span>
+              </button>
+
+              <button
+                id="customer-settlement-top-btn"
+                onClick={() => {
+                  setSettlementTarget(null);
+                  setIsSettlementModalOpen(true);
+                }}
+                className="bg-black hover:bg-slate-900 text-white border border-slate-750 hover:border-slate-600 font-bold text-xs sm:text-sm px-3 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
+                title="تسوية مالية لعميل (تصفير رصيد / خصم تسوية / مطابقة كشف)"
+              >
+                <Scale className="w-4 h-4 text-white" />
+                <span className="text-white font-bold">تسوية مالية</span>
+              </button>
+
+              <button
+                id="customer-settlements-ledger-top-btn"
+                onClick={() => setIsSettlementsLedgerModalOpen(true)}
+                className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 font-bold text-xs sm:text-sm px-2.5 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                title="سجل التسويات المالية المعتمدة للعملاء والموردين"
+              >
+                <Scale className="w-4 h-4 text-slate-300" />
+                <span className="hidden lg:inline">سجل التسويات</span>
+                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-black border border-slate-700 text-white font-bold">
+                  {settlements.filter((s) => s.partnerType === 'customer').length}
+                </span>
+              </button>
+            </>
           )}
 
           <button
@@ -780,6 +920,16 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                                 <Wallet className="w-3.5 h-3.5" />
                               </button>
                               <button
+                                onClick={() => {
+                                  setSettlementTarget({ type: 'supplier', data: supplier });
+                                  setIsSettlementModalOpen(true);
+                                }}
+                                className="p-1.5 rounded-lg bg-black hover:bg-slate-900 text-white border border-slate-750 text-xs font-bold transition-all active:scale-95 shadow-xs"
+                                title="تسوية مالية للمورد (تصفير رصيد / خصم تسوية / مطابقة حساب)"
+                              >
+                                <Scale className="w-3.5 h-3.5 text-white" />
+                              </button>
+                              <button
                                 onClick={() => setStatementPartner({ type: 'supplier', data: supplier })}
                                 className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all"
                                 title="كشف حساب وفواتير المورد"
@@ -954,6 +1104,17 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                       <span>عملية الدفع (سند صرف)</span>
                     </button>
                     <button
+                      onClick={() => {
+                        setSettlementTarget({ type: 'supplier', data: supplier });
+                        setIsSettlementModalOpen(true);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-black hover:bg-slate-900 text-white border border-slate-750 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-xs"
+                      title="تسوية مالية للمورد (تصفير رصيد / خصم تسوية / مطابقة)"
+                    >
+                      <Scale className="w-3.5 h-3.5 text-white" />
+                      <span className="text-white font-bold">تسوية مالية</span>
+                    </button>
+                    <button
                       onClick={() => setStatementPartner({ type: 'supplier', data: supplier })}
                       className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 border border-slate-700"
                     >
@@ -1104,11 +1265,22 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                   <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800/80 flex-wrap">
                     <button
                       onClick={() => setPaymentTarget({ type: 'customer', data: customer })}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-xs"
-                      title="تسجيل دفعة نقدية / تسديد من رصيد العميل"
+                      className="px-3 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-slate-950 border border-yellow-500 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+                      title="تسجيل سند قبض نقدية / تحصيل من العميل"
                     >
-                      <Wallet className="w-3.5 h-3.5 text-amber-400" />
-                      <span>عملية الدفع (تسديد)</span>
+                      <Wallet className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
+                      <span className="text-slate-950 font-black">سند قبض (تسديد)</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSettlementTarget({ type: 'customer', data: customer });
+                        setIsSettlementModalOpen(true);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-black hover:bg-slate-900 text-white border border-slate-750 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-xs"
+                      title="تسوية مالية للعميل (تصفير رصيد / خصم تسوية / مطابقة)"
+                    >
+                      <Scale className="w-3.5 h-3.5 text-white" />
+                      <span className="text-white font-bold">تسوية مالية</span>
                     </button>
                     <button
                       onClick={() => setStatementPartner({ type: 'customer', data: customer })}
@@ -1516,16 +1688,18 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                 (() => {
                   const supPurchases = purchases.filter(p => p.supplierId === statementPartner.data.id || p.supplierName === statementPartner.data.name);
                   const supPayments = payments.filter(p => p.partnerId === statementPartner.data.id || p.partnerName === statementPartner.data.name);
+                  const supSettlements = settlements.filter(s => s.partnerId === statementPartner.data.id || s.partnerName === statementPartner.data.name);
 
                   // Combine into single ledger timeline
                   const timeline: Array<{
-                    type: 'invoice' | 'payment';
+                    type: 'invoice' | 'payment' | 'settlement';
                     id: string;
                     date: string;
                     ref: string;
                     amount: number;
                     subtitle: string;
                     rawItem: any;
+                    adjustmentType?: 'increase' | 'decrease';
                   }> = [
                     ...supPurchases.map(p => ({
                       type: 'invoice' as const,
@@ -1544,6 +1718,16 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                       amount: pay.amount,
                       subtitle: `سند صرف مسدد (${pay.paymentMethod === 'cash' ? 'نقداً' : pay.paymentMethod === 'card' ? 'بطاقة' : pay.paymentMethod === 'transfer' ? 'تحويل' : 'شيك'})`,
                       rawItem: pay,
+                    })),
+                    ...supSettlements.map(settle => ({
+                      type: 'settlement' as const,
+                      id: settle.id,
+                      date: settle.date,
+                      ref: settle.settlementNumber,
+                      amount: settle.adjustmentAmount,
+                      adjustmentType: settle.adjustmentType,
+                      subtitle: `تسوية مالية (${settle.settlementMode === 'zero_balance' ? 'تصفير رصيد' : settle.settlementMode === 'target_balance' ? 'مطابقة رصيد' : settle.settlementMode === 'discount' ? 'خصم تسوية' : 'تعديل رصيد'}) - ${settle.reason}`,
+                      rawItem: settle,
                     }))
                   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -1563,15 +1747,21 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                       className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
                         item.type === 'payment'
                           ? 'bg-amber-950/20 border-amber-800/40 text-amber-200'
+                          : item.type === 'settlement'
+                          ? 'bg-black/90 border-slate-700 text-white'
                           : 'bg-slate-800/80 hover:bg-slate-800 border-slate-750 cursor-pointer'
                       }`}
                     >
                       <div>
                         <div className="flex items-center gap-1.5 font-bold font-mono">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-                            item.type === 'payment' ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300'
+                            item.type === 'payment' 
+                              ? 'bg-amber-500/20 text-amber-300' 
+                              : item.type === 'settlement'
+                              ? 'bg-black text-white border border-slate-700'
+                              : 'bg-blue-500/20 text-blue-300'
                           }`}>
-                            {item.type === 'payment' ? 'سند صرف' : 'فاتورة توريد'}
+                            {item.type === 'payment' ? 'سند صرف' : item.type === 'settlement' ? 'تسوية مالية' : 'فاتورة توريد'}
                           </span>
                           <span className="text-white">{item.ref}</span>
                         </div>
@@ -1580,12 +1770,19 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                       </div>
                       <div className="text-left">
                         <div className={`font-black font-mono ${
-                          item.type === 'payment' ? 'text-amber-400' : 'text-blue-400'
+                          item.type === 'payment' 
+                            ? 'text-amber-400' 
+                            : item.type === 'settlement'
+                            ? 'text-white'
+                            : 'text-blue-400'
                         }`}>
-                          {item.type === 'payment' ? '-' : '+'}{formatCurrency(item.amount, currency)}
+                          {item.type === 'payment' || (item.type === 'settlement' && item.adjustmentType === 'decrease') ? '-' : '+'}{formatCurrency(item.amount, currency)}
                         </div>
                         {item.type === 'payment' && (
                           <span className="text-[10px] text-emerald-400 font-bold block">تم السداد</span>
+                        )}
+                        {item.type === 'settlement' && (
+                          <span className="text-[10px] text-slate-300 font-bold block">معتمد</span>
                         )}
                       </div>
                     </div>
@@ -1595,16 +1792,18 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                 (() => {
                   const custSales = sales.filter(s => s.customerId === statementPartner.data.id || s.customerName === statementPartner.data.name);
                   const custPayments = payments.filter(p => p.partnerId === statementPartner.data.id || p.partnerName === statementPartner.data.name);
+                  const custSettlements = settlements.filter(s => s.partnerId === statementPartner.data.id || s.partnerName === statementPartner.data.name);
 
                   // Combine into single ledger timeline
                   const timeline: Array<{
-                    type: 'invoice' | 'payment';
+                    type: 'invoice' | 'payment' | 'settlement';
                     id: string;
                     date: string;
                     ref: string;
                     amount: number;
                     subtitle: string;
                     rawItem: any;
+                    adjustmentType?: 'increase' | 'decrease';
                   }> = [
                     ...custSales.map(s => ({
                       type: 'invoice' as const,
@@ -1623,6 +1822,16 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                       amount: pay.amount,
                       subtitle: `سند قبض نقدية (${pay.paymentMethod === 'cash' ? 'نقداً' : pay.paymentMethod === 'card' ? 'بطاقة' : pay.paymentMethod === 'transfer' ? 'تحويل' : 'شيك'})`,
                       rawItem: pay,
+                    })),
+                    ...custSettlements.map(settle => ({
+                      type: 'settlement' as const,
+                      id: settle.id,
+                      date: settle.date,
+                      ref: settle.settlementNumber,
+                      amount: settle.adjustmentAmount,
+                      adjustmentType: settle.adjustmentType,
+                      subtitle: `تسوية مالية (${settle.settlementMode === 'zero_balance' ? 'تصفير رصيد' : settle.settlementMode === 'target_balance' ? 'مطابقة رصيد' : settle.settlementMode === 'discount' ? 'خصم تسوية' : 'تعديل رصيد'}) - ${settle.reason}`,
+                      rawItem: settle,
                     }))
                   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -1641,16 +1850,22 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                       }}
                       className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
                         item.type === 'payment'
-                          ? 'bg-emerald-950/25 border-emerald-800/40 text-emerald-200'
+                          ? 'bg-yellow-950/25 border-yellow-700/40 text-yellow-200'
+                          : item.type === 'settlement'
+                          ? 'bg-black/90 border-slate-700 text-white'
                           : 'bg-slate-800/80 hover:bg-slate-800 border-slate-750 cursor-pointer'
                       }`}
                     >
                       <div>
                         <div className="flex items-center gap-1.5 font-bold font-mono">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-                            item.type === 'payment' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700 text-slate-300'
+                            item.type === 'payment' 
+                              ? 'bg-yellow-400 text-slate-950 font-black border border-yellow-500 shadow-2xs' 
+                              : item.type === 'settlement'
+                              ? 'bg-black text-white border border-slate-700'
+                              : 'bg-slate-700 text-slate-300'
                           }`}>
-                            {item.type === 'payment' ? 'سند قبض' : 'فاتورة مبيعات'}
+                            {item.type === 'payment' ? 'سند قبض' : item.type === 'settlement' ? 'تسوية مالية' : 'فاتورة مبيعات'}
                           </span>
                           <span className="text-white">{item.ref}</span>
                         </div>
@@ -1659,12 +1874,19 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                       </div>
                       <div className="text-left">
                         <div className={`font-black font-mono ${
-                          item.type === 'payment' ? 'text-emerald-400' : 'text-white'
+                          item.type === 'payment' 
+                            ? 'text-yellow-400' 
+                            : item.type === 'settlement'
+                            ? 'text-white'
+                            : 'text-white'
                         }`}>
-                          {item.type === 'payment' ? '-' : '+'}{formatCurrency(item.amount, currency)}
+                          {item.type === 'payment' || (item.type === 'settlement' && item.adjustmentType === 'decrease') ? '-' : '+'}{formatCurrency(item.amount, currency)}
                         </div>
                         {item.type === 'payment' && (
-                          <span className="text-[10px] text-emerald-400 font-bold block">تم القبض</span>
+                          <span className="text-[10px] text-yellow-400 font-bold block">تم القبض</span>
+                        )}
+                        {item.type === 'settlement' && (
+                          <span className="text-[10px] text-slate-300 font-bold block">معتمد</span>
                         )}
                       </div>
                     </div>
@@ -1697,10 +1919,30 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                   setStatementPartner(null);
                   setPaymentTarget(targetToPay);
                 }}
-                className="w-full py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-amber-500/40 transition-all active:scale-95 shadow-sm"
+                className={`w-full py-2.5 font-black rounded-xl text-xs flex items-center justify-center gap-2 border transition-all active:scale-95 shadow-sm ${
+                  statementPartner.type === 'customer'
+                    ? 'bg-yellow-400 hover:bg-yellow-300 text-slate-950 border-yellow-500 shadow-md'
+                    : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40'
+                }`}
               >
-                <Wallet className="w-4 h-4 text-amber-400" />
-                <span>تسجيل دفعة لهذا الحساب (عملية الدفع)</span>
+                <Wallet className={`w-4 h-4 ${statementPartner.type === 'customer' ? 'text-slate-950 stroke-[2.5]' : 'text-amber-400'}`} />
+                <span className={statementPartner.type === 'customer' ? 'text-slate-950 font-black' : ''}>
+                  {statementPartner.type === 'customer' ? 'تسجيل سند قبض نقدية لهذا العميل' : 'تسجيل دفعة لهذا الحساب (عملية الدفع)'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const targetToSettle = statementPartner;
+                  setStatementPartner(null);
+                  setSettlementTarget(targetToSettle);
+                  setIsSettlementModalOpen(true);
+                }}
+                className="w-full py-2.5 bg-black hover:bg-slate-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-750 transition-all active:scale-95 shadow-md"
+              >
+                <Scale className="w-4 h-4 text-white" />
+                <span className="text-white font-bold">إجراء تسوية مالية لهذا الحساب</span>
               </button>
 
               <button
@@ -1995,10 +2237,16 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
 
       {/* Partner Payment Modal (عملية الدفع - سند قبض / سند صرف) */}
       <PaymentModal
-        isOpen={!!paymentTarget}
+        isOpen={!!paymentTarget || isSupplierPaymentModalOpen}
         partner={paymentTarget}
+        suppliers={suppliers}
+        customers={customers}
+        defaultType={partnerType === 'suppliers' ? 'supplier' : 'customer'}
         currency={currency}
-        onClose={() => setPaymentTarget(null)}
+        onClose={() => {
+          setPaymentTarget(null);
+          setIsSupplierPaymentModalOpen(false);
+        }}
         onSavePayment={(newPayment) => {
           if (onRecordPayment) {
             onRecordPayment(newPayment);
@@ -2006,6 +2254,58 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
           setToastMessage(`تم تسجيل عملية الدفع بنجاح بقيمة ${formatCurrency(newPayment.amount, currency)}`);
           setTimeout(() => setToastMessage(null), 4000);
         }}
+      />
+
+      {/* Supplier Payments Ledger Modal (سجل سندات الصرف للموردين) */}
+      <SupplierPaymentsLedgerModal
+        isOpen={isPaymentsHistoryOpen}
+        onClose={() => setIsPaymentsHistoryOpen(false)}
+        payments={payments}
+        suppliers={suppliers}
+        currency={currency}
+        onOpenNewPayment={() => {
+          setIsPaymentsHistoryOpen(false);
+          setPaymentTarget(null);
+          setIsSupplierPaymentModalOpen(true);
+        }}
+        onDeletePayment={onDeletePayment}
+      />
+
+      {/* Financial Settlement Modal (التسوية المالية - تصفير رصيد / خصم تسوية / مطابقة) */}
+      <SettlementModal
+        isOpen={isSettlementModalOpen}
+        partner={settlementTarget}
+        suppliers={suppliers}
+        customers={customers}
+        defaultType={partnerType === 'suppliers' ? 'supplier' : 'customer'}
+        currency={currency}
+        onClose={() => {
+          setIsSettlementModalOpen(false);
+          setSettlementTarget(null);
+        }}
+        onSaveSettlement={(newSettlement) => {
+          if (onRecordSettlement) {
+            onRecordSettlement(newSettlement);
+          }
+          setToastMessage(`تم تسجيل التسوية المالية بنجاح بقيمة ${formatCurrency(newSettlement.adjustmentAmount, currency)}`);
+          setTimeout(() => setToastMessage(null), 4000);
+        }}
+      />
+
+      {/* Settlements Ledger Modal (سجل التسويات المالية المعتمدة) */}
+      <SettlementsLedgerModal
+        isOpen={isSettlementsLedgerModalOpen}
+        onClose={() => setIsSettlementsLedgerModalOpen(false)}
+        settlements={settlements}
+        suppliers={suppliers}
+        customers={customers}
+        currency={currency}
+        onOpenNewSettlement={() => {
+          setIsSettlementsLedgerModalOpen(false);
+          setSettlementTarget(null);
+          setIsSettlementModalOpen(true);
+        }}
+        onDeleteSettlement={onDeleteSettlement}
       />
 
       {/* Floating Toast Message */}

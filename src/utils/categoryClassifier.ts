@@ -127,3 +127,81 @@ export const classifyProductCategory = (productName: string, currentCategory?: s
 };
 
 export const STORE_CATEGORY_NAMES: string[] = STORE_CATEGORIES.map(c => c.name);
+
+// Palette of comfortable, pleasant preset colors for categories
+export const CATEGORY_COLOR_PRESETS = [
+  { id: 'emerald', label: 'أخضر زمردي', bg: 'bg-emerald-600/30', border: 'border-emerald-500', text: 'text-emerald-300', dot: 'bg-emerald-500', chip: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50' },
+  { id: 'sky', label: 'أزرق سماوي', bg: 'bg-sky-600/30', border: 'border-sky-500', text: 'text-sky-300', dot: 'bg-sky-500', chip: 'bg-sky-500/20 text-sky-300 border-sky-500/50' },
+  { id: 'rose', label: 'وردي لطيف', bg: 'bg-rose-600/30', border: 'border-rose-500', text: 'text-rose-300', dot: 'bg-rose-500', chip: 'bg-rose-500/20 text-rose-300 border-rose-500/50' },
+  { id: 'amber', label: 'كهرماني دافئ', bg: 'bg-amber-600/30', border: 'border-amber-500', text: 'text-amber-300', dot: 'bg-amber-500', chip: 'bg-amber-500/20 text-amber-300 border-amber-500/50' },
+  { id: 'purple', label: 'بنفسجي ملكي', bg: 'bg-purple-600/30', border: 'border-purple-500', text: 'text-purple-300', dot: 'bg-purple-500', chip: 'bg-purple-500/20 text-purple-300 border-purple-500/50' },
+  { id: 'indigo', label: 'نيلي هادئ', bg: 'bg-indigo-600/30', border: 'border-indigo-500', text: 'text-indigo-300', dot: 'bg-indigo-500', chip: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50' },
+  { id: 'teal', label: 'تركواز بحري', bg: 'bg-teal-600/30', border: 'border-teal-500', text: 'text-teal-300', dot: 'bg-teal-500', chip: 'bg-teal-500/20 text-teal-300 border-teal-500/50' },
+  { id: 'orange', label: 'برتقالي مشرق', bg: 'bg-orange-600/30', border: 'border-orange-500', text: 'text-orange-300', dot: 'bg-orange-500', chip: 'bg-orange-500/20 text-orange-300 border-orange-500/50' },
+  { id: 'fuchsia', label: 'فوشيا زاهي', bg: 'bg-fuchsia-600/30', border: 'border-fuchsia-500', text: 'text-fuchsia-300', dot: 'bg-fuchsia-500', chip: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/50' },
+  { id: 'slate', label: 'رمادي كلاسيكي', bg: 'bg-slate-700/40', border: 'border-slate-500', text: 'text-slate-200', dot: 'bg-slate-400', chip: 'bg-slate-700/50 text-slate-200 border-slate-500/50' },
+];
+
+const CUSTOM_CATEGORIES_KEY = 'app_inventory_custom_categories_v1';
+const CATEGORY_COLORS_KEY = 'app_inventory_category_colors_v1';
+
+// Default harmonious colors for existing categories
+export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
+  'بسكويت وحلويات': 'emerald',
+  'شوكولاتة وسناكات': 'amber',
+  'مواد غذائية وتموين': 'sky',
+  'مشروبات وعصائر': 'indigo',
+  'ألبان وأجبان': 'purple',
+  'معلبات ومصبرات': 'orange',
+  'منظفات وعناية': 'teal',
+  'غير مصنف': 'slate',
+};
+
+export const getStoredCategoryColors = (): Record<string, string> => {
+  try {
+    const raw = localStorage.getItem(CATEGORY_COLORS_KEY);
+    if (!raw) return DEFAULT_CATEGORY_COLORS;
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null 
+      ? { ...DEFAULT_CATEGORY_COLORS, ...parsed } 
+      : DEFAULT_CATEGORY_COLORS;
+  } catch (e) {
+    console.error('Error reading category colors', e);
+    return DEFAULT_CATEGORY_COLORS;
+  }
+};
+
+export const saveStoredCategoryColors = (colors: Record<string, string>) => {
+  try {
+    localStorage.setItem(CATEGORY_COLORS_KEY, JSON.stringify(colors));
+  } catch (e) {
+    console.error('Error saving category colors', e);
+  }
+};
+
+export const getCategoryColorPreset = (colorId?: string) => {
+  return CATEGORY_COLOR_PRESETS.find(p => p.id === colorId) || CATEGORY_COLOR_PRESETS[0];
+};
+
+export const getStoredCustomCategories = (): string[] => {
+  try {
+    const raw = localStorage.getItem(CUSTOM_CATEGORIES_KEY);
+    if (!raw) return STORE_CATEGORY_NAMES;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+    return STORE_CATEGORY_NAMES;
+  } catch (e) {
+    console.error('Error reading custom categories', e);
+    return STORE_CATEGORY_NAMES;
+  }
+};
+
+export const saveStoredCustomCategories = (categories: string[]) => {
+  try {
+    localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(categories));
+  } catch (e) {
+    console.error('Error saving custom categories', e);
+  }
+};

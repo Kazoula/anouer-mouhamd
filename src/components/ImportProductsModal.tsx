@@ -26,7 +26,7 @@ import * as XLSX from 'xlsx';
 import { Product, Supplier } from '../types';
 import { formatCurrency } from '../utils/calculations';
 import { normalizeProductUnits } from '../utils/unitHelpers';
-import { classifyProductCategory, STORE_CATEGORY_NAMES } from '../utils/categoryClassifier';
+import { classifyProductCategory, STORE_CATEGORY_NAMES, getStoredCustomCategories } from '../utils/categoryClassifier';
 
 interface ImportProductsModalProps {
   isOpen: boolean;
@@ -1456,7 +1456,7 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
                             className="bg-slate-800/90 hover:bg-slate-800 border border-emerald-500/40 text-emerald-400 font-bold rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:border-emerald-400 cursor-pointer max-w-[140px]"
                             title="تغيير قسم الصنف"
                           >
-                            {STORE_CATEGORY_NAMES.map(cat => (
+                            {getStoredCustomCategories().map(cat => (
                               <option key={cat} value={cat} className="bg-slate-900 text-white font-normal">
                                 {cat}
                               </option>

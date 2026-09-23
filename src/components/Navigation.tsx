@@ -122,9 +122,13 @@ export const Navigation: React.FC<NavigationProps> = ({
   ];
 
   return (
-    <nav className={`fixed bottom-0 left-0 right-0 z-40 bg-slate-900/90 dark:bg-black/90 backdrop-blur-2xl border-t border-purple-500/20 dark:border-white/10 text-slate-400 mx-auto shadow-2xl transition-all ${
-      isMobileFrame ? 'max-w-md sm:rounded-b-[28px]' : 'max-w-4xl'
-    }`}>
+    <nav 
+      id="bottom-main-navigation"
+      className={`fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 dark:bg-black/95 backdrop-blur-2xl border-t border-purple-500/20 dark:border-white/10 text-slate-400 mx-auto shadow-2xl transition-all ${
+        isMobileFrame ? 'max-w-md sm:rounded-b-[28px]' : 'max-w-4xl'
+      }`}
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    >
       <div className="flex items-center justify-around px-1 py-1.5 sm:py-2">
         {tabs.map((tab) => {
           const Icon = tab.icon;
