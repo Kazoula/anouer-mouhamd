@@ -44,7 +44,8 @@ import {
   getStoredSettlements,
   saveStoredSettlements,
   resetAllData,
-  exportDataBackup
+  exportDataBackup,
+  hydrateFromIndexedDB
 } from './utils/storage';
 import {
   seedInitialFirestoreData,
@@ -101,6 +102,8 @@ import { AlertsModal } from './components/AlertsModal';
 import { InvoiceModal } from './components/InvoiceModal';
 import { SettingsModal } from './components/SettingsModal';
 import { CloudSyncModal } from './components/CloudSyncModal';
+import { FloatingCornerRefresh } from './components/FloatingCornerRefresh';
+import { areProductsMatching } from './utils/calculations';
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>(() => getStoredProducts());
@@ -138,6 +141,22 @@ export default function App() {
 
     const setupFirebaseSync = async () => {
       try {
+        // Hydrate from IndexedDB if more complete data exists
+        try {
+          const idbData = await hydrateFromIndexedDB();
+          if (idbData.products && idbData.products.length > 0) {
+            setProducts((prev) => (idbData.products!.length > prev.length ? idbData.products! : prev));
+          }
+          if (idbData.sales && idbData.sales.length > 0) {
+            setSales((prev) => (idbData.sales!.length > prev.length ? idbData.sales! : prev));
+          }
+          if (idbData.movements && idbData.movements.length > 0) {
+            setMovements((prev) => (idbData.movements!.length > prev.length ? idbData.movements! : prev));
+          }
+        } catch (e) {
+          console.warn('Hydration from IndexedDB notice:', e);
+        }
+
         setCloudSyncStatus('syncing');
         await initFirebaseAuth();
 
@@ -247,7 +266,9 @@ export default function App() {
               saveStoredTheme(cloudPrefs.theme);
             }
             if (cloudPrefs.searchTypingDelaySec !== undefined) {
-              localStorage.setItem('pos_search_typing_delay_sec', String(cloudPrefs.searchTypingDelaySec));
+              try {
+                localStorage.setItem('pos_search_typing_delay_sec', String(cloudPrefs.searchTypingDelaySec));
+              } catch {}
               window.dispatchEvent(new CustomEvent('pos_typing_delay_changed', { detail: cloudPrefs.searchTypingDelaySec }));
             }
           }
@@ -331,6 +352,42 @@ export default function App() {
     handleChangeTheme(nextTheme);
   };
 
+  // Fast App Refresh & Memory Purge (When app gets heavy or slow)
+  const [isAppRefreshing, setIsAppRefreshing] = useState(false);
+
+  const handleFastRefreshApp = async (hard = false) => {
+    if (isAppRefreshing) return;
+    setIsAppRefreshing(true);
+
+    if (hard) {
+      window.location.reload();
+      return;
+    }
+
+    try {
+      // 1. Re-hydrate and sync latest storage data
+      const idbData = await hydrateFromIndexedDB();
+      if (idbData.products && idbData.products.length > 0) {
+        setProducts(prev => (idbData.products!.length >= prev.length ? idbData.products! : prev));
+      }
+      if (idbData.sales && idbData.sales.length > 0) {
+        setSales(prev => (idbData.sales!.length >= prev.length ? idbData.sales! : prev));
+      }
+      if (idbData.movements && idbData.movements.length > 0) {
+        setMovements(prev => (idbData.movements!.length >= prev.length ? idbData.movements! : prev));
+      }
+
+      // 2. Clear transient caches & trigger GC-friendly custom refresh
+      window.dispatchEvent(new CustomEvent('app_fast_refresh'));
+    } catch (e) {
+      console.warn('Fast refresh error:', e);
+    } finally {
+      setTimeout(() => {
+        setIsAppRefreshing(false);
+      }, 700);
+    }
+  };
+
   // UI States
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [isMobileFrame, setIsMobileFrame] = useState<boolean>(false);
@@ -394,7 +451,7 @@ export default function App() {
 
   const handleBulkImportProducts = (
     importedProducts: Product[],
-    strategy: 'update' | 'skip' | 'replace'
+    strategy: 'update' | 'add_stock' | 'update_prices_only' | 'skip' | 'replace'
   ) => {
     const newMovements: StockMovement[] = [];
     const timestamp = new Date().toISOString();
@@ -405,7 +462,7 @@ export default function App() {
 
       importedProducts.forEach(imp => {
         const matchIdx = updatedList.findIndex(
-          p => (imp.barcode && p.barcode === imp.barcode) || p.name.toLowerCase().trim() === imp.name.toLowerCase().trim()
+          p => areProductsMatching(imp, p)
         );
 
         if (matchIdx >= 0) {
@@ -416,9 +473,30 @@ export default function App() {
             return;
           }
 
+          let newStock = existing.stockPieces;
+
           if (strategy === 'update') {
-            const addedStock = imp.stockPieces || 0;
-            const newStock = existing.stockPieces + addedStock;
+            // Sync and update stock to match the sheet (Jard / Inventory sync)
+            newStock = Math.max(0, imp.stockPieces ?? 0);
+            const diff = newStock - existing.stockPieces;
+
+            if (diff !== 0) {
+              newMovements.push({
+                id: `mov_imp_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+                productId: existing.id,
+                productName: existing.name,
+                date: timestamp,
+                type: diff > 0 ? 'adjustment_add' : 'adjustment_sub',
+                quantityPieces: Math.abs(diff),
+                previousStock: existing.stockPieces,
+                newStock: newStock,
+                notes: 'تحديث ومطابقة الرصيد مع الشيت (جرد مخزني)',
+              });
+            }
+          } else if (strategy === 'add_stock') {
+            // Add sheet quantity on top of existing balance
+            const addedStock = Math.max(0, imp.stockPieces || 0);
+            newStock = existing.stockPieces + addedStock;
 
             if (addedStock > 0) {
               newMovements.push({
@@ -430,10 +508,37 @@ export default function App() {
                 quantityPieces: addedStock,
                 previousStock: existing.stockPieces,
                 newStock: newStock,
-                notes: 'استيراد من الشيت (تحديث أسعار وإضافة رصيد)',
+                notes: 'استيراد من الشيت (إضافة كمية للرصيد الحالي)',
+              });
+            }
+          } else if (strategy === 'update_prices_only') {
+            // Keep existing stock unchanged
+            newStock = existing.stockPieces;
+          }
+
+          if (strategy === 'replace') {
+            newStock = Math.max(0, imp.stockPieces || 0);
+            if (newStock !== existing.stockPieces) {
+              newMovements.push({
+                id: `mov_imp_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+                productId: existing.id,
+                productName: existing.name,
+                date: timestamp,
+                type: newStock >= existing.stockPieces ? 'adjustment_add' : 'adjustment_sub',
+                quantityPieces: Math.abs(newStock - existing.stockPieces),
+                previousStock: existing.stockPieces,
+                newStock: newStock,
+                notes: 'استيراد من الشيت (استبدال كلي للرصيد والأسعار)',
               });
             }
 
+            updatedList[matchIdx] = {
+              ...imp,
+              id: existing.id,
+              createdAt: existing.createdAt,
+              updatedAt: timestamp,
+            };
+          } else {
             // Calculate updated prices
             let updatedSalePriceMinor = imp.salePriceMinor > 0 ? imp.salePriceMinor : existing.salePriceMinor;
             let updatedPurchasePriceMinor = imp.purchasePriceMinor > 0 ? imp.purchasePriceMinor : existing.purchasePriceMinor;
@@ -470,28 +575,6 @@ export default function App() {
               notes: imp.notes || existing.notes,
               updatedAt: timestamp,
             };
-          } else if (strategy === 'replace') {
-            const newStock = imp.stockPieces || 0;
-            if (newStock !== existing.stockPieces) {
-              newMovements.push({
-                id: `mov_imp_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-                productId: existing.id,
-                productName: existing.name,
-                date: timestamp,
-                type: newStock >= existing.stockPieces ? 'adjustment_add' : 'adjustment_sub',
-                quantityPieces: Math.abs(newStock - existing.stockPieces),
-                previousStock: existing.stockPieces,
-                newStock: newStock,
-                notes: 'استيراد من الشيت (استبدال كلي للرصيد والأسعار)',
-              });
-            }
-
-            updatedList[matchIdx] = {
-              ...imp,
-              id: existing.id,
-              createdAt: existing.createdAt,
-              updatedAt: timestamp,
-            };
           }
         } else {
           // New product to be inserted
@@ -521,7 +604,9 @@ export default function App() {
       setMovements(prev => [...newMovements, ...prev]);
       bulkSaveMovementsToFirestore(newMovements).catch(console.error);
     }
+    saveStoredProducts(finalUpdated);
     bulkSaveProductsToFirestore(finalUpdated).catch(console.error);
+    window.dispatchEvent(new CustomEvent('app_storage_updated'));
   };
 
   const handleDeleteProduct = (productId: string) => {
@@ -1266,7 +1351,9 @@ export default function App() {
           saveStoredTheme(data.preferences.theme);
         }
         if (data.preferences.searchTypingDelaySec !== undefined) {
-          localStorage.setItem('pos_search_typing_delay_sec', String(data.preferences.searchTypingDelaySec));
+          try {
+            localStorage.setItem('pos_search_typing_delay_sec', String(data.preferences.searchTypingDelaySec));
+          } catch {}
           window.dispatchEvent(new CustomEvent('pos_typing_delay_changed', { detail: data.preferences.searchTypingDelaySec }));
         }
       }
@@ -1428,6 +1515,8 @@ export default function App() {
           onToggleTheme={handleToggleTheme}
           cloudSyncStatus={cloudSyncStatus}
           onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+          onFastRefresh={handleFastRefreshApp}
+          isRefreshing={isAppRefreshing}
         />
 
         {/* Unsynced Alert Banner if local has more items than cloud */}
@@ -1448,7 +1537,7 @@ export default function App() {
         )}
 
         {/* Tab Views */}
-        <main className="flex-1 w-full pb-32 sm:pb-36">
+        <main className="flex-1 w-full pb-18 sm:pb-20">
           {activeTab === 'dashboard' && (
             <DashboardTab
               products={products}
@@ -1556,6 +1645,7 @@ export default function App() {
               sales={sales}
               purchases={purchases}
               currency={currency}
+              onSelectSaleInvoice={(inv) => setSelectedSaleForModal(inv)}
             />
           )}
 
@@ -1604,6 +1694,12 @@ export default function App() {
           lowStockCount={lowStockCount}
           pendingOrdersCount={pendingOrdersCount}
           isMobileFrame={isMobileFrame}
+        />
+
+        {/* Professional Corner Refresh & Speed Boost Floating Icon */}
+        <FloatingCornerRefresh 
+          onFastRefresh={handleFastRefreshApp}
+          isRefreshing={isAppRefreshing}
         />
       </div>
 

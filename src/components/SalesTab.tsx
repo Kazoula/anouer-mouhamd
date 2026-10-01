@@ -575,7 +575,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   });
 
   return (
-    <div className="space-y-4 pb-32 sm:pb-36 pt-2 px-3 sm:px-4">
+    <div className="space-y-4 pt-2 px-3 sm:px-4">
       {/* Top Action Bar */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">

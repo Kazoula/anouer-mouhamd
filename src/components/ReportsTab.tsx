@@ -12,7 +12,8 @@ import {
   PieChart as PieIcon,
   ChevronDown,
   Download,
-  Info
+  Info,
+  CheckCircle2
 } from 'lucide-react';
 import { Product, SaleInvoice, PurchaseInvoice, ReportPeriod, ProfitLossReport } from '../types';
 import { calculateProfitLossReport, formatCurrency, formatArabicDateOnly, formatArabicDateTime } from '../utils/calculations';
@@ -23,6 +24,7 @@ interface ReportsTabProps {
   sales: SaleInvoice[];
   purchases: PurchaseInvoice[];
   currency: string;
+  onSelectSaleInvoice?: (invoice: SaleInvoice) => void;
 }
 
 export const ReportsTab: React.FC<ReportsTabProps> = ({
@@ -30,6 +32,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   sales,
   purchases,
   currency,
+  onSelectSaleInvoice,
 }) => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
   const [customStart, setCustomStart] = useState<string>(() => {
@@ -44,6 +47,35 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   const report: ProfitLossReport = useMemo(() => {
     return calculateProfitLossReport(sales, purchases, products, period, customStart, customEnd);
   }, [sales, purchases, products, period, customStart, customEnd]);
+
+  // Daily Sales & Profits performance data (حركة المبيعات والأرباح اليومية)
+  const dailyPerformanceData = useMemo(() => {
+    const days: { [key: string]: { date: string; sales: number; profit: number } } = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      const dayName = d.toLocaleDateString('ar-SA', { weekday: 'short' });
+      days[key] = { date: dayName, sales: 0, profit: 0 };
+    }
+
+    sales.forEach(sale => {
+      const saleDate = sale.date.split('T')[0];
+      if (days[saleDate]) {
+        days[saleDate].sales += sale.netAmount;
+        days[saleDate].profit += (sale.totalProfit || 0);
+      }
+    });
+
+    return Object.values(days);
+  }, [sales]);
+
+  // Recent sales list (آخر فواتير المبيعات)
+  const recentSales = useMemo(() => {
+    return [...sales]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 6);
+  }, [sales]);
 
   // Chart data for revenue vs cost vs profit
   const financialOverviewData = [
@@ -68,7 +100,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-32 sm:pb-36 pt-2 px-3 sm:px-4">
+    <div className="space-y-4 pt-2 px-3 sm:px-4">
       {/* Period Selector Tabs */}
       <div className="bg-slate-850 p-2.5 rounded-2xl border border-slate-800 shadow-md">
         <div className="flex items-center justify-between mb-2">
@@ -202,6 +234,41 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
 
         {/* Charts Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Daily Sales and Profits Chart (حركة المبيعات والأرباح اليومية) */}
+          <div className="bg-slate-850 p-3.5 rounded-2xl border border-slate-800 shadow-md">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="text-xs font-bold text-slate-200">حركة المبيعات والأرباح اليومية</h3>
+                <p className="text-[11px] text-slate-400">آخر 7 أيام من النشاط</p>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold">
+                <span className="flex items-center gap-1 text-sky-400">
+                  <span className="w-2 h-2 rounded-full bg-sky-500"></span>
+                  المبيعات
+                </span>
+                <span className="flex items-center gap-1 text-purple-400">
+                  <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                  الأرباح
+                </span>
+              </div>
+            </div>
+            <div className="h-44 w-full pt-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dailyPerformanceData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#181230', borderColor: '#4c1d95', borderRadius: '12px', fontSize: '12px' }}
+                    labelStyle={{ color: '#d8b4fe', fontWeight: 'bold' }}
+                    formatter={(val: any) => [`${Number(val).toLocaleString('en-US')} ${currency}`]}
+                  />
+                  <Bar dataKey="sales" name="المبيعات" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="profit" name="الأرباح" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
           {/* Financial Overview Bar Chart */}
           <div className="bg-slate-850 p-3.5 rounded-2xl border border-slate-800 shadow-md">
             <h3 className="text-xs font-bold text-slate-200 mb-2">مقارنة الإيرادات والتكاليف والأرباح</h3>
@@ -225,31 +292,31 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
           </div>
 
           {/* Inventory Valuation Breakdown */}
-          <div className="bg-slate-850 p-3.5 rounded-2xl border border-slate-800 shadow-md flex flex-col justify-between">
+          <div className="bg-slate-850 p-3.5 rounded-2xl border border-slate-800 shadow-md flex flex-col justify-between md:col-span-2">
             <div>
               <div className="flex items-center gap-1.5 mb-2.5">
                 <Boxes className="w-4 h-4 text-emerald-400" />
                 <h3 className="text-xs font-bold text-slate-200">تقييم المخزون الحالي وأرباحه المستقبلية</h3>
               </div>
 
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between items-center bg-slate-900/80 p-2 rounded-xl border border-slate-800">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <div className="flex justify-between items-center bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
                   <span className="text-slate-400">إجمالي كمية القطع بالمستودع:</span>
                   <span className="font-bold text-white">{report.inventoryValuation.totalPieces.toLocaleString('en-US')} قطعة</span>
                 </div>
 
-                <div className="flex justify-between items-center bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">القيمة الإجمالية بسعر الشراء (رأس المال):</span>
+                <div className="flex justify-between items-center bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">القيمة بسعر الشراء (رأس المال):</span>
                   <span className="font-bold text-amber-400">{formatCurrency(report.inventoryValuation.totalCostValue, currency)}</span>
                 </div>
 
-                <div className="flex justify-between items-center bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">القيمة المتوقعة بسعر البيع (الإيراد المتوقع):</span>
+                <div className="flex justify-between items-center bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">القيمة المتوقعة بسعر البيع:</span>
                   <span className="font-bold text-white">{formatCurrency(report.inventoryValuation.totalRetailValue, currency)}</span>
                 </div>
 
-                <div className="flex justify-between items-center bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-500/30">
-                  <span className="font-bold text-emerald-300">صافي الأرباح المتوقعة عند بيع المخزون:</span>
+                <div className="sm:col-span-3 flex justify-between items-center bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-500/30">
+                  <span className="font-bold text-emerald-300">صافي الأرباح المتوقعة عند بيع كامل المخزون:</span>
                   <span className="font-black text-emerald-400 text-sm">
                     {formatCurrency(report.inventoryValuation.expectedFutureProfit, currency)}
                   </span>
@@ -257,6 +324,68 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Recent Invoices Feed (آخر فواتير المبيعات) */}
+        <div className="bg-slate-850 p-3.5 sm:p-5 rounded-2xl border border-slate-800 shadow-md">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold text-slate-200">آخر فواتير المبيعات</h3>
+              <p className="text-[11px] text-slate-400">سجل أحدث عمليات البيع والفواتير الصادرة</p>
+            </div>
+            <span className="text-xs font-bold text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-full border border-purple-500/20">
+              {recentSales.length} فواتير
+            </span>
+          </div>
+
+          {recentSales.length === 0 ? (
+            <div className="text-center py-8 text-xs text-slate-500">
+              لا توجد فواتير مبيعات مسجلة حتى الآن
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {recentSales.map(invoice => (
+                <div
+                  key={invoice.id}
+                  onClick={() => onSelectSaleInvoice && onSelectSaleInvoice(invoice)}
+                  className="bg-slate-900/80 hover:bg-slate-800 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between cursor-pointer transition-all active:scale-[0.99] group shadow-xs"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg crystal-icon text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold text-xs shrink-0">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-xs text-white group-hover:text-purple-300 transition-colors truncate max-w-[140px]">
+                          {invoice.customerName}
+                        </span>
+                        <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.2 rounded font-mono border border-slate-700 shrink-0">
+                          {invoice.invoiceNumber}
+                        </span>
+                      </div>
+                      <div className="text-[10.5px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                        <span>{formatArabicDateTime(invoice.date)}</span>
+                        <span>•</span>
+                        <span className="text-purple-600 dark:text-purple-400 font-semibold">ربح: {formatCurrency(invoice.totalProfit, currency)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-left shrink-0">
+                    <div className="font-black text-xs text-white">
+                      {formatCurrency(invoice.netAmount, currency)}
+                    </div>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold inline-block mt-0.5 ${
+                      invoice.paymentStatus === 'paid'
+                        ? 'text-purple-600 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20'
+                        : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
+                    }`}>
+                      {invoice.paymentStatus === 'paid' ? 'مسدد' : 'آجل'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Top Profitable Products Leaderboard */}

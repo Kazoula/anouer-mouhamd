@@ -326,3 +326,88 @@ export const formatArabicDateOnly = (dateStr: string): string => {
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}/${m}/${d}`;
 };
+
+/**
+ * Normalizes Arabic text for flexible matching across Excel sheets and database:
+ * - Unifies Alef forms (أ, إ, آ -> ا)
+ * - Unifies Taa Marbouta (ة -> ه)
+ * - Unifies Yaa (ى -> ي)
+ * - Removes Arabic diacritics (harakat / tashkeel) and tatweel (ـ)
+ * - Strips common packaging tags in parentheses like (وحدتان), (3 وحدات), (قطعة), (كرتونة)
+ * - Normalizes multiple spaces
+ */
+export const normalizeArabicText = (str: string): string => {
+  if (!str) return '';
+  return str
+    .trim()
+    .toLowerCase()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/[\u064B-\u065F\u0670ـ]/g, '') // remove tashkeel/diacritics and tatweel
+    .replace(/\s*\([^)]*\)\s*$/g, '') // strip trailing packaging like "(وحدتان)" or "(3 وحدات)"
+    .replace(/\s+/g, ' ');
+};
+
+/**
+ * Safely parses numbers from Algerian/French Excel spreadsheets and clipboard text:
+ * Converts Arabic-Indic (٠-٩) and Persian (۰-۹) digits, handles decimal commas,
+ * strips currency symbols, spaces, and scientific notation.
+ */
+export const parseLocalizedNumber = (val: any): number => {
+  if (val === undefined || val === null || val === '') return NaN;
+  if (typeof val === 'number') return isNaN(val) ? NaN : val;
+  const str = String(val).trim();
+  if (!str) return NaN;
+
+  // Convert Arabic-Indic & Persian numerals
+  const westernized = str
+    .replace(/[٠۰]/g, '0')
+    .replace(/[١۱]/g, '1')
+    .replace(/[٢۲]/g, '2')
+    .replace(/[٣۳]/g, '3')
+    .replace(/[٤۴]/g, '4')
+    .replace(/[٥۵]/g, '5')
+    .replace(/[٦۶]/g, '6')
+    .replace(/[٧۷]/g, '7')
+    .replace(/[٨۸]/g, '8')
+    .replace(/[٩۹]/g, '9')
+    .replace(/\s+/g, '') // remove spaces in numbers like "1 200"
+    .replace(/,/g, '.'); // convert decimal comma to period
+
+  // Handle scientific notation e.g. 6.281E+11 or direct numbers
+  const cleaned = westernized.replace(/[^0-9.eE+-]+/g, '');
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? NaN : num;
+};
+
+/**
+ * Checks if an imported product matches an existing product in the database:
+ * 1. Barcode match (handling leading zeros and length)
+ * 2. Exact or normalized Arabic name match
+ * 3. Substring matching when one name contains the other
+ */
+export const areProductsMatching = (
+  p1: { name?: string; barcode?: string },
+  p2: { name?: string; barcode?: string }
+): boolean => {
+  const b1 = (p1.barcode || '').trim().replace(/^0+/, '');
+  const b2 = (p2.barcode || '').trim().replace(/^0+/, '');
+
+  if (b1 && b2 && b1.length >= 4 && b2.length >= 4 && b1 === b2) {
+    return true;
+  }
+
+  const n1 = normalizeArabicText(p1.name || '');
+  const n2 = normalizeArabicText(p2.name || '');
+
+  if (n1 && n2) {
+    if (n1 === n2) return true;
+    // If one is a complete substring of the other (e.g. "مصاصة ساشي" inside "مصاصة ساشي Bifa GOOD POP")
+    if (n1.length >= 6 && n2.length >= 6) {
+      if (n1.includes(n2) || n2.includes(n1)) return true;
+    }
+  }
+
+  return false;
+};

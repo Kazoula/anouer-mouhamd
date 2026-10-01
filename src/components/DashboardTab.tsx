@@ -9,12 +9,10 @@ import {
   Truck,
   ArrowUpRight,
   DollarSign,
-  CheckCircle2,
   FileSpreadsheet
 } from 'lucide-react';
 import { Product, SaleInvoice, PurchaseInvoice } from '../types';
-import { formatCurrency, formatArabicDateTime } from '../utils/calculations';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { formatCurrency } from '../utils/calculations';
 
 interface DashboardTabProps {
   products: Product[];
@@ -26,7 +24,7 @@ interface DashboardTabProps {
   onQuickNewSale: () => void;
   onQuickNewPurchase: () => void;
   onQuickNewProduct: () => void;
-  onSelectSaleInvoice: (invoice: SaleInvoice) => void;
+  onSelectSaleInvoice?: (invoice: SaleInvoice) => void;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -52,33 +50,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // Urgent alerts
   const lowStockProducts = products.filter(p => p.stockPieces <= p.minStockAlert);
 
-  // Last 7 days performance data for chart
-  const getLast7DaysData = () => {
-    const days: { [key: string]: { date: string; sales: number; profit: number } } = {};
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().split('T')[0];
-      const dayName = d.toLocaleDateString('ar-SA', { weekday: 'short' });
-      days[key] = { date: dayName, sales: 0, profit: 0 };
-    }
-
-    sales.forEach(sale => {
-      const saleDate = sale.date.split('T')[0];
-      if (days[saleDate]) {
-        days[saleDate].sales += sale.netAmount;
-        days[saleDate].profit += (sale.totalProfit || 0);
-      }
-    });
-
-    return Object.values(days);
-  };
-
-  const chartData = getLast7DaysData();
-  const recentSales = sales.slice(0, 5);
-
   return (
-    <div className="space-y-3.5 sm:space-y-5 p-3 sm:p-4 pb-32 sm:pb-36 max-w-4xl mx-auto">
+    <div className="space-y-3.5 sm:space-y-5 p-3 sm:p-4 max-w-4xl mx-auto">
       {/* Primary Quick Actions Window (Shown at Top within Phone Boundaries) */}
       <div 
         id="home-quick-actions-window"
@@ -287,7 +260,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
 
         {/* Bento Card 4: Inventory Valuation Summary - Teal / Cyan */}
-        <div className="col-span-12 sm:col-span-6 bg-slate-850/90 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-md hover:border-purple-500/30 transition-colors">
+        <div className="col-span-12 bg-slate-850/90 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-md hover:border-purple-500/30 transition-colors">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div 
@@ -315,103 +288,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 {formatCurrency(totalInventoryRetail, currency)}
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Bento Card 6: Performance Chart */}
-        <div className="col-span-12 sm:col-span-7 bg-slate-850/90 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-md">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="text-xs font-bold text-slate-200">حركة المبيعات والأرباح اليومية</h3>
-              <p className="text-[11px] text-slate-400">آخر 7 أيام من النشاط</p>
-            </div>
-            <button
-              onClick={() => setActiveTab('reports')}
-              className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-500 flex items-center gap-0.5 group cursor-pointer"
-            >
-              <span>التقرير الشامل</span>
-              <ChevronLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
-            </button>
-          </div>
-          <div className="h-44 w-full pt-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#181230', borderColor: '#4c1d95', borderRadius: '12px', fontSize: '12px' }}
-                  labelStyle={{ color: '#d8b4fe', fontWeight: 'bold' }}
-                  formatter={(val: any) => [`${Number(val).toLocaleString('en-US')} ${currency}`]}
-                />
-                <Bar dataKey="sales" name="المبيعات" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="profit" name="الأرباح" fill="#a855f7" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Bento Card 7: Recent Sales Feed */}
-        <div className="col-span-12 sm:col-span-5 bg-slate-850/90 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-md flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-bold text-slate-200">آخر فواتير المبيعات</h3>
-              <button
-                onClick={() => setActiveTab('pos')}
-                className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-500 flex items-center gap-0.5 group cursor-pointer"
-              >
-                <span>الكل</span>
-                <ChevronLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
-              </button>
-            </div>
-
-            {recentSales.length === 0 ? (
-              <div className="text-center py-8 text-xs text-slate-500">
-                لا توجد فواتير مبيعات مسجلة حتى الآن
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {recentSales.map(invoice => (
-                  <div
-                    key={invoice.id}
-                    onClick={() => onSelectSaleInvoice(invoice)}
-                    className="bg-slate-900/80 hover:bg-slate-800 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between cursor-pointer transition-all active:scale-[0.99] group"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg crystal-icon text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold text-xs">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-xs text-white group-hover:text-purple-300 transition-colors">
-                            {invoice.customerName}
-                          </span>
-                          <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.2 rounded font-mono border border-slate-700">
-                            {invoice.invoiceNumber}
-                          </span>
-                        </div>
-                        <div className="text-[10.5px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                          <span>{formatArabicDateTime(invoice.date)}</span>
-                          <span>•</span>
-                          <span className="text-purple-600 dark:text-purple-400 font-semibold">ربح: {formatCurrency(invoice.totalProfit, currency)}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-left">
-                      <div className="font-black text-xs text-white">
-                        {formatCurrency(invoice.netAmount, currency)}
-                      </div>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold inline-block mt-0.5 ${
-                        invoice.paymentStatus === 'paid'
-                          ? 'text-purple-600 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20'
-                          : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
-                      }`}>
-                        {invoice.paymentStatus === 'paid' ? 'مسدد' : 'آجل'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>

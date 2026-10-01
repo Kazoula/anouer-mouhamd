@@ -21,6 +21,7 @@ interface NavigationProps {
 interface TabConfig {
   id: ActiveTab;
   label: string;
+  shortLabel?: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: number;
   // Distinct colors with subtle blur
@@ -43,6 +44,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     { 
       id: 'dashboard', 
       label: 'الرئيسية', 
+      shortLabel: 'الرئيسية',
       icon: LayoutDashboard,
       activePod: 'bg-sky-500/25 dark:bg-sky-400/20 !border-sky-400/80 !shadow-[0_0_14px_rgba(14,165,233,0.45)] scale-105',
       inactivePod: 'bg-sky-500/10 dark:bg-sky-400/10 border-sky-400/25 group-hover:bg-sky-500/20 group-hover:border-sky-400/40',
@@ -54,6 +56,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     { 
       id: 'products', 
       label: 'المخزون', 
+      shortLabel: 'المخزون',
       icon: Boxes, 
       badge: lowStockCount > 0 ? lowStockCount : undefined,
       activePod: 'bg-purple-500/25 dark:bg-purple-400/20 !border-purple-400/80 !shadow-[0_0_14px_rgba(168,85,247,0.45)] scale-105',
@@ -66,6 +69,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     { 
       id: 'pos', 
       label: 'المبيعات', 
+      shortLabel: 'المبيعات',
       icon: ShoppingCart,
       activePod: 'bg-emerald-500/25 dark:bg-emerald-400/20 !border-emerald-400/80 !shadow-[0_0_14px_rgba(16,185,129,0.45)] scale-105',
       inactivePod: 'bg-emerald-500/10 dark:bg-emerald-400/10 border-emerald-400/25 group-hover:bg-emerald-500/20 group-hover:border-emerald-400/40',
@@ -77,6 +81,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     { 
       id: 'store', 
       label: 'المتجر', 
+      shortLabel: 'المتجر',
       icon: Store, 
       badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined,
       activePod: 'bg-rose-500/25 dark:bg-rose-400/20 !border-rose-400/80 !shadow-[0_0_14px_rgba(244,63,94,0.45)] scale-105',
@@ -89,6 +94,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     { 
       id: 'purchases', 
       label: 'المشتريات', 
+      shortLabel: 'الشراء',
       icon: Truck,
       activePod: 'bg-blue-500/25 dark:bg-blue-400/20 !border-blue-400/80 !shadow-[0_0_14px_rgba(59,130,246,0.45)] scale-105',
       inactivePod: 'bg-blue-500/10 dark:bg-blue-400/10 border-blue-400/25 group-hover:bg-blue-500/20 group-hover:border-blue-400/40',
@@ -100,6 +106,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     { 
       id: 'reports', 
       label: 'التقارير', 
+      shortLabel: 'التقارير',
       icon: BarChart3,
       activePod: 'bg-amber-500/25 dark:bg-amber-400/20 !border-amber-400/80 !shadow-[0_0_14px_rgba(245,158,11,0.45)] scale-105',
       inactivePod: 'bg-amber-500/10 dark:bg-amber-400/10 border-amber-400/25 group-hover:bg-amber-500/20 group-hover:border-amber-400/40',
@@ -111,6 +118,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     { 
       id: 'partners', 
       label: 'الشركاء', 
+      shortLabel: 'الشركاء',
       icon: Users,
       activePod: 'bg-teal-500/25 dark:bg-teal-400/20 !border-teal-400/80 !shadow-[0_0_14px_rgba(20,184,166,0.45)] scale-105',
       inactivePod: 'bg-teal-500/10 dark:bg-teal-400/10 border-teal-400/25 group-hover:bg-teal-500/20 group-hover:border-teal-400/40',
@@ -125,11 +133,11 @@ export const Navigation: React.FC<NavigationProps> = ({
     <nav 
       id="bottom-main-navigation"
       className={`fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 dark:bg-black/95 backdrop-blur-2xl border-t border-purple-500/20 dark:border-white/10 text-slate-400 mx-auto shadow-2xl transition-all ${
-        isMobileFrame ? 'max-w-md sm:rounded-b-[28px]' : 'max-w-4xl'
+        isMobileFrame ? 'w-full sm:max-w-md sm:rounded-b-[28px]' : 'w-full sm:max-w-4xl'
       }`}
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      style={{ paddingBottom: 'max(0.35rem, env(safe-area-inset-bottom, 0px))' }}
     >
-      <div className="flex items-center justify-around px-1 py-1.5 sm:py-2">
+      <div className="flex items-center justify-around px-0.5 sm:px-1 py-1 sm:py-1.5">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -143,21 +151,21 @@ export const Navigation: React.FC<NavigationProps> = ({
                   window.scrollTo({ top: 0, behavior: 'instant' });
                 }
               }}
-              className="relative flex flex-col items-center justify-center py-1 px-1 sm:px-1.5 rounded-2xl transition-all duration-200 flex-1 min-w-0 group cursor-pointer"
+              className="relative flex flex-col items-center justify-center py-0.5 px-0.5 sm:px-1 rounded-2xl transition-all duration-200 flex-1 min-w-0 group cursor-pointer"
             >
               {/* Subtle Blur Frosted Glass Icon Pod with Distinct Harmonic Colors */}
               <div 
                 style={{ backdropFilter: 'blur(3.5px)', WebkitBackdropFilter: 'blur(3.5px)' }}
-                className={`relative w-9 h-8 sm:w-10 sm:h-8.5 rounded-xl border flex items-center justify-center transition-all duration-200 ${
+                className={`relative w-8 h-7.5 min-[375px]:w-9 min-[375px]:h-8 sm:w-10 sm:h-8.5 rounded-xl border flex items-center justify-center transition-all duration-200 ${
                   isActive ? tab.activePod : tab.inactivePod
                 }`}
               >
-                <Icon className={`w-4 h-4 sm:w-4.5 sm:h-4.5 transition-transform duration-200 ${
+                <Icon className={`w-3.5 h-3.5 min-[375px]:w-4 min-[375px]:h-4 sm:w-4.5 sm:h-4.5 transition-transform duration-200 ${
                   isActive ? tab.activeIconColor : tab.inactiveIconColor
                 }`} />
                 {tab.badge !== undefined && (
                   <span 
-                    className="keep-white absolute -top-1.5 -right-2 bg-gradient-to-r from-red-600 to-rose-600 text-white !text-white font-black text-[9px] min-w-[18px] h-4.5 px-1 rounded-full flex items-center justify-center shadow-md shadow-red-600/40 leading-none border border-white/50 dark:border-black animate-pulse select-none"
+                    className="keep-white absolute -top-1 -right-1 sm:-top-1.5 sm:-right-2 bg-gradient-to-r from-red-600 to-rose-600 text-white !text-white font-black text-[7.5px] min-[375px]:text-[8.5px] min-w-[15px] sm:min-w-[18px] h-3.5 sm:h-4 px-1 rounded-full flex items-center justify-center shadow-md shadow-red-600/40 leading-none border border-white/50 dark:border-black animate-pulse select-none"
                     style={{ color: '#ffffff' }}
                     dir="ltr"
                   >
@@ -165,12 +173,13 @@ export const Navigation: React.FC<NavigationProps> = ({
                   </span>
                 )}
               </div>
-              <span className={`text-[9.5px] sm:text-[10px] mt-1 truncate max-w-full tracking-tight transition-colors ${
+              <span className={`text-[8px] min-[360px]:text-[8.5px] min-[390px]:text-[9.5px] sm:text-[10px] mt-0.5 sm:mt-1 truncate max-w-full tracking-tight transition-colors ${
                 isActive 
                   ? tab.activeLabel 
                   : `text-slate-400 dark:text-slate-400 ${tab.hoverLabel} font-medium`
               }`}>
-                {tab.label}
+                <span className="hidden min-[380px]:inline">{tab.label}</span>
+                <span className="min-[380px]:hidden">{tab.shortLabel || tab.label}</span>
               </span>
             </button>
           );

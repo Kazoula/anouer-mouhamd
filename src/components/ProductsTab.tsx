@@ -61,7 +61,7 @@ interface ProductsTabProps {
   suppliers: Supplier[];
   currency: string;
   onSaveProduct: (product: Product) => void;
-  onBulkImport: (products: Product[], strategy: 'update' | 'skip' | 'replace') => void;
+  onBulkImport: (products: Product[], strategy: 'update' | 'add_stock' | 'update_prices_only' | 'skip' | 'replace') => void;
   onDeleteProduct: (productId: string) => void;
   onDeleteAllProducts?: (clearMovements?: boolean) => void;
   onAdjustStock: (productId: string, diffPieces: number, reason: string) => void;
@@ -613,18 +613,18 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
     : [];
 
   return (
-    <div className="space-y-4 pb-32 sm:pb-36 pt-2 px-3 sm:px-4">
+    <div className="space-y-4 pt-2 px-3 sm:px-4">
       {/* Top Header with Search, Import Sheet, and New Product Buttons */}
       <div>
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <div className="relative flex-1 min-w-0">
             <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
             <input
               type="text"
               placeholder="بحث بأي جزء من الكلمة (مثال: ندوي أو MAX LE) أو السعر أو الباركود أو التصنيف..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-9 pl-8 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
             />
             {searchQuery && (
               <button
@@ -636,7 +636,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 justify-end">
           {products.length > 0 && onDeleteAllProducts && (
             <button
               id="delete-all-products-btn"
@@ -644,7 +644,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                 setClearMovementsWithAll(false);
                 setIsDeleteAllModalOpen(true);
               }}
-              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 hover:border-rose-500 font-bold text-xs sm:text-sm px-2.5 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 hover:border-rose-500 font-bold text-xs sm:text-sm px-2.5 sm:px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
               title="حذف جميع الأصناف بضغطة واحدة"
             >
               <Trash2 className="w-4 h-4 text-rose-500 dark:text-rose-400" />
@@ -655,17 +655,17 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
           <button
             id="import-products-sheet-btn"
             onClick={() => setIsImportModalOpen(true)}
-            className="bg-slate-800 hover:bg-slate-750 text-emerald-400 border border-emerald-500/40 hover:border-emerald-400 font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
+            className="bg-slate-800 hover:bg-slate-750 text-emerald-400 border border-emerald-500/40 hover:border-emerald-400 font-bold text-xs sm:text-sm px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
             title="استيراد أصناف جماعية من ملف Excel أو Google Sheets"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            <span>استيراد من الشيت</span>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>استيراد<span className="hidden min-[420px]:inline"> من الشيت</span></span>
           </button>
 
           <button
             id="add-new-product-btn"
             onClick={openAddModal}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 active:scale-95 transition-all"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 active:scale-95 transition-all shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>صنف جديد</span>

@@ -24,7 +24,12 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product, Supplier } from '../types';
-import { formatCurrency } from '../utils/calculations';
+import { 
+  formatCurrency, 
+  parseLocalizedNumber, 
+  normalizeArabicText, 
+  areProductsMatching 
+} from '../utils/calculations';
 import { normalizeProductUnits } from '../utils/unitHelpers';
 import { classifyProductCategory, STORE_CATEGORY_NAMES, getStoredCustomCategories } from '../utils/categoryClassifier';
 
@@ -34,7 +39,7 @@ interface ImportProductsModalProps {
   existingProducts: Product[];
   suppliers: Supplier[];
   currency: string;
-  onBulkImport: (products: Product[], strategy: 'update' | 'skip' | 'replace') => void;
+  onBulkImport: (products: Product[], strategy: 'update' | 'add_stock' | 'update_prices_only' | 'skip' | 'replace') => void;
 }
 
 interface ColumnMapping {
@@ -116,7 +121,7 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
   const [rawRows, setRawRows] = useState<Record<string, any>[]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [pastedText, setPastedText] = useState<string>('');
-  const [importStrategy, setImportStrategy] = useState<'update' | 'skip' | 'replace'>('update');
+  const [importStrategy, setImportStrategy] = useState<'update' | 'add_stock' | 'update_prices_only' | 'skip' | 'replace'>('update');
   const [autoGroupUnits, setAutoGroupUnits] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -185,7 +190,12 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
       salePriceMiddle: findHeader(['سعر بيع الوسطى', 'سعر بيع العلبة', 'سعر بيع الباكت', 'سعر الوسطى', 'sale_middle', 'price_middle', 'prix_vente_moyen']),
       salePriceMajor: findHeader(['سعر بيع الكبرى', 'سعر بيع الكرتونة', 'سعر كبرى', 'سعر الكرتونة', 'sale_major', 'carton_price', 'prix_gros']),
       tierPrice: findHeader(['سعر 5 ومافوق', 'سعر 5 وما فوق', 'سعر 5', 'سعر5ومافوق', 'سعر الجملة', 'سعر جملة', 'wholesale_price', 'tier_price', 'prix_5']),
-      stockPieces: findHeader(['الرصيد', 'رصيد', 'المخزون', 'الكمية', 'الرصيد الحالي', 'الرصيد الافتتاحي', 'الكمية المتوفرة', 'الكمية بالمخزن', 'stock', 'qty', 'quantity', 'solde', 'qte']),
+      stockPieces: findHeader([
+        'الرصيد', 'رصيد', 'المخزون', 'الكمية', 'الرصيد الحالي', 'الرصيد الافتتاحي', 
+        'الكمية المتوفرة', 'الكمية بالمخزن', 'الرصيد الكلي', 'رصيد المخزن', 'المخزون الحالي', 
+        'الرصيد النهائي', 'رصيد القطع', 'الكمية الحالية', 'الكميات', 'stock', 'qty', 'quantity', 
+        'solde', 'qte', 'stk', 'solde_stock', 'qte_stock', 'stock_actuel', 'inventaire', 'quantite'
+      ]),
       minStockAlert: findHeader(['حد التنبيه', 'الحد الأدنى', 'نقص المخزون', 'تنبيه النواقص', 'minalert', 'min_stock', 'alert', 'seuil_alerte']),
       supplierName: findHeader(['المورد', 'اسم المورد', 'الشركة الموردة', 'supplier', 'fournisseur', 'vendor']),
       notes: findHeader(['ملاحظات', 'الوصف', 'تفاصيل', 'notes', 'remarques', 'comment']),
@@ -311,15 +321,9 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
 
     setErrorMessage(null);
 
-    // Helper to safely parse raw number from cell without any math
+    // Helper to safely parse localized number from cell (Arabic, English, French decimal commas)
     const parseNumberDirect = (val: any): number => {
-      if (val === undefined || val === null || val === '') return NaN;
-      if (typeof val === 'number') return isNaN(val) ? NaN : val;
-      const str = String(val).trim();
-      if (!str) return NaN;
-      const cleaned = str.replace(/[^0-9.-]+/g, '');
-      const num = parseFloat(cleaned);
-      return isNaN(num) ? NaN : num;
+      return parseLocalizedNumber(val);
     };
 
     // Auto-grouping mode (only when explicit and rows.length >= 2)
@@ -329,8 +333,8 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
       rawRows.forEach((r) => {
         const nameVal = String(r[columnMapping.name] || '').trim();
         if (!nameVal) return;
-        // Group strictly by normalized product name so multiple unit rows and barcode rows are merged!
-        const key = nameVal.toLowerCase().replace(/\s+/g, ' ');
+        // Group strictly by normalized Arabic product name so unit rows and spellings merge!
+        const key = normalizeArabicText(nameVal);
         
         if (!groupsMap.has(key)) {
           groupsMap.set(key, []);
@@ -445,12 +449,14 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
           const minorStocks = minorRows.map(r => r.stock);
           const uniqueStocks = Array.from(new Set(minorStocks));
           if (uniqueStocks.length === 1) {
-            totalStockPieces += uniqueStocks[0];
+            totalStockPieces = uniqueStocks[0];
           } else {
             const maxSt = Math.max(...minorStocks);
-            totalStockPieces += maxSt;
+            totalStockPieces = maxSt;
           }
         }
+
+        const minorStockInitial = totalStockPieces;
 
         // Deduce distinct packaging units (Middle / Major):
         const distinctPackaging: ParsedUnitRow[] = [];
@@ -469,16 +475,25 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
           piecesPerMiddleUnit = midRow.ratio;
           sMiddle = midRow.salePrice > 0 ? midRow.salePrice : (sMinor * piecesPerMiddleUnit);
           pMiddle = midRow.purchasePrice > 0 ? midRow.purchasePrice : (pMinor * piecesPerMiddleUnit);
-          if (midRow.stock !== 0) {
-            totalStockPieces += (midRow.stock * piecesPerMiddleUnit);
-          }
 
           majorUnit = majRow.cleanUnit !== minorUnit && majRow.cleanUnit !== middleUnit ? majRow.cleanUnit : 'كرتونة';
           piecesPerMajorUnit = majRow.ratio;
           sMajor = majRow.salePrice > 0 ? majRow.salePrice : (sMinor * piecesPerMajorUnit);
           pMajor = majRow.purchasePrice > 0 ? majRow.purchasePrice : (pMinor * piecesPerMajorUnit);
-          if (majRow.stock !== 0) {
-            totalStockPieces += (majRow.stock * piecesPerMajorUnit);
+
+          const midStockPieces = (midRow.stock || 0) * piecesPerMiddleUnit;
+          const majStockPieces = (majRow.stock || 0) * piecesPerMajorUnit;
+          const pkgStockPieces = midStockPieces + majStockPieces;
+
+          // Intelligent POS stock deduplication:
+          // In POS sheets, if the minor unit stock (e.g. 23) is already >= the packaging portions,
+          // the minor unit row already represents the total inventory in pieces!
+          if (minorStockInitial >= pkgStockPieces && minorStockInitial > 0) {
+            totalStockPieces = minorStockInitial;
+          } else if (minorStockInitial > 0 && minorStockInitial < piecesPerMiddleUnit) {
+            totalStockPieces = pkgStockPieces + minorStockInitial;
+          } else {
+            totalStockPieces = Math.max(minorStockInitial, pkgStockPieces);
           }
 
           if (majRow.tierPrice > 0) {
@@ -492,8 +507,19 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
           piecesPerMajorUnit = majRow.ratio;
           sMajor = majRow.salePrice > 0 ? majRow.salePrice : (sMinor * piecesPerMajorUnit);
           pMajor = majRow.purchasePrice > 0 ? majRow.purchasePrice : (pMinor * piecesPerMajorUnit);
-          if (majRow.stock !== 0) {
-            totalStockPieces += (majRow.stock * piecesPerMajorUnit);
+
+          const majStockPieces = (majRow.stock || 0) * piecesPerMajorUnit;
+
+          // In POS exports (e.g. MS/ POS), the minor unit row (e.g. 23) represents total stock in pieces,
+          // while the carton row (e.g. 2) represents the integer carton count (20 pieces).
+          // If minorStock >= majStockPieces (23 >= 20), minorStock ALREADY contains the cartons!
+          if (minorStockInitial >= majStockPieces && minorStockInitial > 0) {
+            totalStockPieces = minorStockInitial;
+          } else if (minorStockInitial > 0 && minorStockInitial < piecesPerMajorUnit) {
+            // minorStock is just loose pieces (e.g. 3 loose pieces + 2 cartons = 23 pieces)
+            totalStockPieces = majStockPieces + minorStockInitial;
+          } else {
+            totalStockPieces = Math.max(minorStockInitial, majStockPieces);
           }
 
           if (majRow.tierPrice > 0) {
@@ -505,6 +531,7 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
           piecesPerMajorUnit = 1;
           sMajor = sMinor;
           pMajor = pMinor;
+          totalStockPieces = minorStockInitial;
         }
 
         // Tier price from any row if not already set
@@ -531,7 +558,7 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
         const matchedSupplier = suppliers.find(s => s.name.toLowerCase() === supplierNameVal.toLowerCase());
 
         const existingMatch = existingProducts.find(
-          p => (barcodeVal && p.barcode === barcodeVal) || (nameVal && p.name.toLowerCase() === nameVal.toLowerCase())
+          p => areProductsMatching({ name: nameVal, barcode: barcodeVal }, p)
         );
 
         const generatedBarcode = barcodeVal || (existingMatch ? existingMatch.barcode : `628${Math.floor(100000000 + Math.random() * 900000000)}`);
@@ -663,9 +690,12 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
         pMiddle = pMinor * (piecesPerMiddleUnit || 1);
       }
 
-      // Stock Quantity - take directly as-is from the sheet
+      // Stock Quantity - take directly as-is or adjust for packaging unit
       const parsedStock = columnMapping.stockPieces ? parseNumberDirect(rawRow[columnMapping.stockPieces]) : 0;
-      const stockPieces = !isNaN(parsedStock) ? parsedStock : 0;
+      let stockPieces = !isNaN(parsedStock) ? parsedStock : 0;
+      if (piecesPerMajorUnit > 1 && rawUnitVal === majorUnitVal && majorUnitVal !== minorUnitVal && stockPieces > 0) {
+        stockPieces = stockPieces * piecesPerMajorUnit;
+      }
 
       // Min Alert
       const alertRaw = columnMapping.minStockAlert ? parseNumberDirect(rawRow[columnMapping.minStockAlert]) : 10;
@@ -687,7 +717,7 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
       }
 
       const existingMatch = existingProducts.find(
-        p => (barcodeVal && p.barcode === barcodeVal) || (nameVal && p.name.toLowerCase() === nameVal.toLowerCase())
+        p => areProductsMatching({ name: nameVal, barcode: barcodeVal }, p)
       );
 
       const generatedBarcode = barcodeVal || (existingMatch ? existingMatch.barcode : `628${Math.floor(100000000 + Math.random() * 900000000)}`);
@@ -771,6 +801,23 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
           mapped: {
             ...copy[idx].mapped,
             category: newCategory,
+          },
+        };
+      }
+      return copy;
+    });
+  };
+
+  // Change stock of a specific row directly in the preview table
+  const handleRowStockChange = (idx: number, newStock: number) => {
+    setProcessedRows(prev => {
+      const copy = [...prev];
+      if (copy[idx]) {
+        copy[idx] = {
+          ...copy[idx],
+          mapped: {
+            ...copy[idx].mapped,
+            stockPieces: Math.max(0, newStock),
           },
         };
       }
@@ -1293,41 +1340,56 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-850 p-3.5 rounded-2xl border border-slate-800 text-xs">
               <div>
                 <label className="text-slate-300 font-bold block mb-1.5">
-                  خطة التعامل مع الأصناف الموجودة مسبقاً في المخزن ({duplicatesCount}):
+                  خطة التعامل مع الأصناف الموجودة مسبقاً ({duplicatesCount} صنف مطابق):
                 </label>
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   <button
                     type="button"
                     onClick={() => setImportStrategy('update')}
-                    className={`py-1.5 px-2 rounded-xl font-bold border text-center transition-all ${
+                    className={`py-1.5 px-2 rounded-xl font-bold border text-center transition-all flex flex-col items-center justify-center ${
                       importStrategy === 'update'
-                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
-                        : 'bg-slate-800 border-slate-700 text-slate-400'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500/50'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    تحديث وإضافة كمية
+                    <span className="text-xs">تحديث ومطابقة الرصيد</span>
+                    <span className="text-[9px] opacity-75 font-normal">(مطابقة الشيت)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImportStrategy('add_stock')}
+                    className={`py-1.5 px-2 rounded-xl font-bold border text-center transition-all flex flex-col items-center justify-center ${
+                      importStrategy === 'add_stock'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500/50'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="text-xs">إضافة كمية الشيت</span>
+                    <span className="text-[9px] opacity-75 font-normal">(فوق الرصيد القديم)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImportStrategy('update_prices_only')}
+                    className={`py-1.5 px-2 rounded-xl font-bold border text-center transition-all flex flex-col items-center justify-center ${
+                      importStrategy === 'update_prices_only'
+                        ? 'bg-purple-500/20 border-purple-500 text-purple-300 ring-1 ring-purple-500/50'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="text-xs">تحديث الأسعار فقط</span>
+                    <span className="text-[9px] opacity-75 font-normal">(إبقاء الرصيد)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setImportStrategy('skip')}
-                    className={`py-1.5 px-2 rounded-xl font-bold border text-center transition-all ${
+                    className={`py-1.5 px-2 rounded-xl font-bold border text-center transition-all flex flex-col items-center justify-center ${
                       importStrategy === 'skip'
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                        : 'bg-slate-800 border-slate-700 text-slate-400'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/50'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    تخطي المكرر
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setImportStrategy('replace')}
-                    className={`py-1.5 px-2 rounded-xl font-bold border text-center transition-all ${
-                      importStrategy === 'replace'
-                        ? 'bg-blue-500/20 border-blue-500 text-blue-300'
-                        : 'bg-slate-800 border-slate-700 text-slate-400'
-                    }`}
-                  >
-                    استبدال كلي
+                    <span className="text-xs">تخطي الموجود</span>
+                    <span className="text-[9px] opacity-75 font-normal">(جديد فقط)</span>
                   </button>
                 </div>
               </div>
@@ -1498,8 +1560,29 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
                             <span className="text-slate-500 font-normal text-xs">-</span>
                           )}
                         </td>
-                        <td className="p-2.5 text-slate-200 font-bold">
-                          {row.mapped.stockPieces} {row.mapped.minorUnit}
+                        <td className="p-2.5">
+                          <div className="flex items-center gap-1.5 min-w-[125px]">
+                            <input
+                              type="number"
+                              min="0"
+                              inputMode="numeric"
+                              value={row.mapped.stockPieces !== undefined ? row.mapped.stockPieces : 0}
+                              onChange={(e) => {
+                                const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                handleRowStockChange(origIndex, val);
+                              }}
+                              className="w-18 bg-slate-800 border border-emerald-500/50 rounded-lg px-2 py-1 text-white font-black text-xs focus:ring-1 focus:ring-emerald-400 focus:outline-none"
+                              title="تعديل الرصيد يدوياً قبل التأكيد"
+                            />
+                            <span className="text-[11px] text-slate-300 font-semibold truncate">
+                              {row.mapped.minorUnit || 'قطعة'}
+                            </span>
+                          </div>
+                          {row.mapped.piecesPerMajorUnit && row.mapped.piecesPerMajorUnit > 1 && row.mapped.majorUnit !== row.mapped.minorUnit && (
+                            <span className="block text-[10px] text-slate-400 font-medium mt-0.5" dir="rtl">
+                              ({Math.floor((row.mapped.stockPieces || 0) / row.mapped.piecesPerMajorUnit)} {row.mapped.majorUnit} و {(row.mapped.stockPieces || 0) % row.mapped.piecesPerMajorUnit} {row.mapped.minorUnit})
+                            </span>
+                          )}
                         </td>
                         <td className="p-2.5">
                           {row.hasErrors ? (

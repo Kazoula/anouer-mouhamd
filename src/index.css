@@ -61,6 +61,17 @@
   background-clip: padding-box;
 }
 
+@media (max-width: 640px) {
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-thumb {
+    min-height: 28px;
+    border-width: 1px;
+  }
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none !important;
   width: 0 !important;
@@ -436,18 +447,24 @@ html.light [class*="text-slate-500"] {
   color: #94a3b8 !important;
 }
 
-/* Solid Colored Action Buttons & Badges in Light Mode (Retain Pure White Text) */
+/* Solid Colored Action Buttons & Badges in Light Mode (Retain Pure White Text on dark saturated buttons) */
 html.light .keep-white,
 html.light .keep-white *,
 html.light [class*="keep-white"],
 html.light [class*="keep-white"] *,
-html.light button[class*="bg-red-"],
-html.light button[class*="bg-emerald-"],
-html.light button[class*="bg-blue-"],
-html.light button[class*="bg-purple-"],
-html.light button[class*="bg-indigo-"],
-html.light button[class*="bg-rose-"],
-html.light button[class*="bg-amber-"],
+html.light button.bg-red-600,
+html.light button.bg-red-500,
+html.light button.bg-emerald-600,
+html.light button.bg-emerald-500,
+html.light button.bg-blue-600,
+html.light button.bg-blue-500,
+html.light button.bg-purple-600,
+html.light button.bg-purple-700,
+html.light button.bg-indigo-600,
+html.light button.bg-rose-600,
+html.light button.bg-rose-500,
+html.light button.bg-amber-600,
+html.light button.bg-teal-600,
 html.light .bg-red-600.text-white,
 html.light .bg-red-500.text-white,
 html.light .bg-emerald-600.text-white,
@@ -463,6 +480,87 @@ html.light .bg-indigo-600.text-white,
 html.light .bg-violet-600.text-white,
 html.light .bg-teal-600.text-white {
   color: #ffffff !important;
+}
+
+/* Light / Pastel unit and action buttons in light mode (Guarantee deep, crisp, readable text and icons) */
+html.light button[class*="bg-amber-50"],
+html.light button[class*="bg-amber-100"],
+html.light button[class*="bg-amber-200"],
+html.light [class*="bg-amber-50"] button,
+html.light [class*="bg-amber-100"] button {
+  color: #78350f !important;
+}
+html.light button[class*="bg-amber-50"] *,
+html.light button[class*="bg-amber-100"] *,
+html.light button[class*="bg-amber-200"] *,
+html.light [class*="bg-amber-50"] button *,
+html.light [class*="bg-amber-100"] button * {
+  color: #78350f !important;
+}
+html.light button[class*="bg-amber-50"] [class*="font-mono"],
+html.light button[class*="bg-amber-100"] [class*="font-mono"],
+html.light button[class*="bg-amber-200"] [class*="font-mono"] {
+  color: #451a03 !important;
+}
+
+html.light button[class*="bg-emerald-50"],
+html.light button[class*="bg-emerald-100"],
+html.light button[class*="bg-emerald-200"],
+html.light [class*="bg-emerald-50"] button,
+html.light [class*="bg-emerald-100"] button {
+  color: #064e3b !important;
+}
+html.light button[class*="bg-emerald-50"] *,
+html.light button[class*="bg-emerald-100"] *,
+html.light button[class*="bg-emerald-200"] *,
+html.light [class*="bg-emerald-50"] button *,
+html.light [class*="bg-emerald-100"] button * {
+  color: #064e3b !important;
+}
+html.light button[class*="bg-emerald-50"] [class*="font-mono"],
+html.light button[class*="bg-emerald-100"] [class*="font-mono"],
+html.light button[class*="bg-emerald-200"] [class*="font-mono"] {
+  color: #022c22 !important;
+}
+
+html.light button[class*="bg-blue-50"],
+html.light button[class*="bg-blue-100"],
+html.light button[class*="bg-blue-200"],
+html.light [class*="bg-blue-50"] button,
+html.light [class*="bg-blue-100"] button {
+  color: #1e3a8a !important;
+}
+html.light button[class*="bg-blue-50"] *,
+html.light button[class*="bg-blue-100"] *,
+html.light button[class*="bg-blue-200"] *,
+html.light [class*="bg-blue-50"] button *,
+html.light [class*="bg-blue-100"] button * {
+  color: #1e3a8a !important;
+}
+html.light button[class*="bg-blue-50"] [class*="font-mono"],
+html.light button[class*="bg-blue-100"] [class*="font-mono"],
+html.light button[class*="bg-blue-200"] [class*="font-mono"] {
+  color: #0f172a !important;
+}
+
+html.light button[class*="bg-purple-50"],
+html.light button[class*="bg-purple-100"],
+html.light button[class*="bg-purple-200"],
+html.light [class*="bg-purple-50"] button,
+html.light [class*="bg-purple-100"] button {
+  color: #581c87 !important;
+}
+html.light button[class*="bg-purple-50"] *,
+html.light button[class*="bg-purple-100"] *,
+html.light button[class*="bg-purple-200"] *,
+html.light [class*="bg-purple-50"] button *,
+html.light [class*="bg-purple-100"] button * {
+  color: #581c87 !important;
+}
+html.light button[class*="bg-purple-50"] [class*="font-mono"],
+html.light button[class*="bg-purple-100"] [class*="font-mono"],
+html.light button[class*="bg-purple-200"] [class*="font-mono"] {
+  color: #3b0764 !important;
 }
 
 html.light .bg-emerald-600 *,

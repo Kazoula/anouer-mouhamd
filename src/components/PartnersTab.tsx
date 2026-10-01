@@ -437,7 +437,7 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-32 sm:pb-36 pt-2 px-3 sm:px-4">
+    <div className="space-y-4 pt-2 px-3 sm:px-4">
       {/* Type Switcher Tabs */}
       <div className="grid grid-cols-2 gap-2 bg-slate-850 p-1.5 rounded-2xl border border-slate-800">
         <button

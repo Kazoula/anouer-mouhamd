@@ -43,7 +43,9 @@ class SoundEffectsEngine {
   public setEnabled(enabled: boolean) {
     this.soundEnabled = enabled;
     if (typeof window !== 'undefined') {
-      localStorage.setItem('pos_sound_enabled', String(enabled));
+      try {
+        localStorage.setItem('pos_sound_enabled', String(enabled));
+      } catch {}
     }
   }
 

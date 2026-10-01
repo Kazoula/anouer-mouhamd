@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Bell, 
   Smartphone, 
@@ -9,7 +9,11 @@ import {
   Moon,
   Cloud,
   Volume2,
-  VolumeX
+  VolumeX,
+  RotateCw,
+  Zap,
+  RefreshCw,
+  Check
 } from 'lucide-react';
 import { Product, ThemeMode } from '../types';
 import { soundEffects } from '../utils/soundEffects';
@@ -25,6 +29,8 @@ interface HeaderProps {
   onToggleTheme: () => void;
   cloudSyncStatus?: 'synced' | 'syncing' | 'offline';
   onOpenCloudSync?: () => void;
+  onFastRefresh?: (hard?: boolean) => void;
+  isRefreshing?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -37,8 +43,62 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleTheme,
   cloudSyncStatus = 'synced',
   onOpenCloudSync,
+  onFastRefresh,
+  isRefreshing = false,
 }) => {
-  const [soundOn, setSoundOn] = React.useState<boolean>(soundEffects.isEnabled());
+  const [soundOn, setSoundOn] = useState<boolean>(soundEffects.isEnabled());
+  const [showRefreshMenu, setShowRefreshMenu] = useState<boolean>(false);
+  const [localRefreshing, setLocalRefreshing] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const refreshMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close refresh menu on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (refreshMenuRef.current && !refreshMenuRef.current.contains(e.target as Node)) {
+        setShowRefreshMenu(false);
+      }
+    };
+    if (showRefreshMenu) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [showRefreshMenu]);
+
+  const activeRefreshing = isRefreshing || localRefreshing;
+
+  const triggerRefresh = (hard = false) => {
+    setShowRefreshMenu(false);
+    if (activeRefreshing) return;
+
+    setLocalRefreshing(true);
+    soundEffects.playIncrease();
+
+    if (hard) {
+      setToastMessage('جاري إعادة تحميل الصفحة بالكامل...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 300);
+      return;
+    }
+
+    if (onFastRefresh) {
+      onFastRefresh(false);
+    } else {
+      window.dispatchEvent(new CustomEvent('app_fast_refresh'));
+    }
+
+    setToastMessage('تم إنعاش التطبيق وتفريغ الذاكرة وتسريع الاستجابة ⚡');
+    setTimeout(() => {
+      setLocalRefreshing(false);
+    }, 700);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 2800);
+  };
+
   // Calculate low stock items count
   const lowStockCount = products.filter(p => p.stockPieces <= p.minStockAlert).length;
 
@@ -187,8 +247,93 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Settings className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
           </button>
+
+          {/* =========================================================
+              PROFESSIONAL CORNER REFRESH & SPEED BOOST BUTTON
+              ========================================================= */}
+          <div className="relative shrink-0" ref={refreshMenuRef}>
+            <button
+              id="corner-fast-refresh-btn"
+              type="button"
+              onClick={() => triggerRefresh(false)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setShowRefreshMenu(!showRefreshMenu);
+              }}
+              style={{ backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+              className={`relative p-1.5 sm:p-2 rounded-xl border transition-all flex items-center justify-center shrink-0 cursor-pointer active:scale-95 group ${
+                activeRefreshing
+                  ? 'bg-teal-500/30 border-teal-400 text-teal-300 shadow-[0_0_18px_rgba(20,184,166,0.6)] ring-2 ring-teal-400/40'
+                  : 'bg-teal-500/15 dark:bg-teal-500/20 border-teal-400/40 text-teal-600 dark:text-teal-300 hover:bg-teal-500/25 hover:border-teal-300 shadow-[0_0_12px_rgba(20,184,166,0.2)]'
+              }`}
+              title="تحديث سريع وإنعاش التطبيق وتفريغ الذاكرة (انقر باليمين لخيارات إضافية)"
+            >
+              <RotateCw 
+                className={`w-4 h-4 sm:w-4.5 sm:h-4.5 transition-transform duration-500 ${
+                  activeRefreshing ? 'animate-spin text-teal-400' : 'group-hover:rotate-180'
+                }`} 
+              />
+              
+              {/* High-Tech Glowing Active Pulse Dot */}
+              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 pointer-events-none">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-80"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-gradient-to-r from-teal-400 to-emerald-400 shadow-xs"></span>
+              </span>
+            </button>
+
+            {/* Quick Context / Dropdown Menu on demand */}
+            {showRefreshMenu && (
+              <div 
+                className="absolute left-0 top-full mt-2 w-56 bg-slate-900/98 border border-teal-500/40 rounded-2xl p-2 shadow-2xl z-50 text-xs backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 space-y-1"
+                dir="rtl"
+              >
+                <div className="px-2 py-1 text-[10px] font-bold text-slate-400 border-b border-slate-800 flex items-center justify-between">
+                  <span>خيارات إنعاش وتسريع التطبيق</span>
+                  <Zap className="w-3 h-3 text-teal-400" />
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => triggerRefresh(false)}
+                  className="w-full text-right px-2.5 py-2 rounded-xl text-teal-300 hover:bg-teal-500/20 flex items-center gap-2 font-bold transition-all cursor-pointer"
+                >
+                  <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+                  <div>
+                    <div className="text-white text-xs">إنعاش فوري للذاكرة</div>
+                    <div className="text-[10px] text-teal-300/80 font-normal">تفريغ الذاكرة المؤقتة وتسريع الأداء</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => triggerRefresh(true)}
+                  className="w-full text-right px-2.5 py-2 rounded-xl text-slate-300 hover:bg-slate-800 flex items-center gap-2 font-bold transition-all cursor-pointer"
+                >
+                  <RefreshCw className="w-4 h-4 text-sky-400 shrink-0" />
+                  <div>
+                    <div className="text-white text-xs">إعادة تحميل كاملة</div>
+                    <div className="text-[10px] text-slate-400 font-normal">إعادة تشغيل المتصفح من البداية</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Floating Speed Boost / Refresh Toast Banner */}
+      {toastMessage && (
+        <div 
+          className="fixed top-16 left-1/2 -translate-x-1/2 z-[250] bg-slate-900/95 dark:bg-black/95 text-teal-300 border-2 border-teal-500/70 shadow-[0_12px_40px_rgba(0,0,0,0.85)] px-4 py-2.5 rounded-2xl flex items-center gap-2.5 backdrop-blur-xl animate-in fade-in slide-in-from-top-4 duration-200 text-xs sm:text-sm font-black pointer-events-none"
+          dir="rtl"
+        >
+          <div className="w-6 h-6 rounded-lg bg-teal-500/20 border border-teal-400/40 flex items-center justify-center shrink-0">
+            <Zap className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
+          </div>
+          <span className="text-white">{toastMessage}</span>
+          <Check className="w-4 h-4 text-teal-400 ml-1" />
+        </div>
+      )}
     </header>
   );
 };

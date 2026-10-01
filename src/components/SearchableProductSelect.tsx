@@ -819,14 +819,34 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                             const unitCartItem = cartItems?.find(ci => ci.productId === prod.id && ci.unitType === u.type);
 
                             const colorClasses = unitCartItem
-                              ? 'bg-emerald-900/50 border-emerald-500 text-emerald-200 ring-1 ring-emerald-500/50 font-black'
+                              ? 'bg-emerald-700 hover:bg-emerald-600 border-emerald-500 text-white shadow-md ring-2 ring-emerald-500/50 font-black'
                               : isMinor
                               ? isEmerald
-                                ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-950 dark:bg-emerald-950/80 dark:hover:bg-emerald-900/90 dark:border-emerald-500/50 dark:text-emerald-200'
-                                : 'bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-950 dark:bg-blue-950/80 dark:hover:bg-blue-900/90 dark:border-blue-500/50 dark:text-blue-200'
+                                ? 'bg-emerald-100/90 hover:bg-emerald-200/90 border-emerald-400/90 text-emerald-950 dark:bg-emerald-950/80 dark:hover:bg-emerald-900/90 dark:border-emerald-500/50 dark:text-emerald-200'
+                                : 'bg-blue-100/90 hover:bg-blue-200/90 border-blue-400/90 text-blue-950 dark:bg-blue-950/80 dark:hover:bg-blue-900/90 dark:border-blue-500/50 dark:text-blue-200'
                               : isMiddle
-                                ? 'bg-purple-50 hover:bg-purple-100 border-purple-300 text-purple-950 dark:bg-purple-950/80 dark:hover:bg-purple-900/90 dark:border-purple-500/50 dark:text-purple-200'
-                                : 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-950 dark:bg-amber-950/80 dark:hover:bg-amber-900/90 dark:border-amber-500/50 dark:text-amber-200';
+                                ? 'bg-purple-100/90 hover:bg-purple-200/90 border-purple-400/90 text-purple-950 dark:bg-purple-950/80 dark:hover:bg-purple-900/90 dark:border-purple-500/50 dark:text-purple-200'
+                                : 'bg-amber-100/90 hover:bg-amber-200/90 border-amber-400/90 text-amber-950 dark:bg-amber-950/80 dark:hover:bg-amber-900/90 dark:border-amber-500/50 dark:text-amber-200';
+
+                            const labelColorClass = unitCartItem
+                              ? 'text-white'
+                              : isMinor
+                              ? isEmerald
+                                ? 'text-emerald-900 dark:text-emerald-300'
+                                : 'text-blue-900 dark:text-blue-300'
+                              : isMiddle
+                                ? 'text-purple-900 dark:text-purple-300'
+                                : 'text-amber-900 dark:text-amber-300';
+
+                            const priceColorClass = unitCartItem
+                              ? 'text-white'
+                              : isMinor
+                              ? isEmerald
+                                ? 'text-emerald-950 dark:text-emerald-100'
+                                : 'text-blue-950 dark:text-blue-100'
+                              : isMiddle
+                                ? 'text-purple-950 dark:text-purple-100'
+                                : 'text-amber-950 dark:text-amber-100';
 
                             return (
                               <button
@@ -838,19 +858,19 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                                 }}
                                 className={`py-2 px-1.5 sm:px-2.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center transition-all border cursor-pointer shadow-xs ${colorClasses}`}
                               >
-                                <span className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold truncate max-w-full">
+                                <span className={`flex items-center gap-1 text-[10px] sm:text-[11px] font-black truncate max-w-full ${labelColorClass}`}>
                                   {unitCartItem ? (
-                                    <span className="text-[10px] text-emerald-300 font-mono font-black bg-emerald-500/30 px-1 rounded">
+                                    <span className="text-[10px] text-white font-mono font-black bg-emerald-800/80 px-1 rounded">
                                       ✓ {unitCartItem.quantity}
                                     </span>
                                   ) : isMinor ? (
-                                    <Plus className="w-3 h-3 stroke-[3]" />
+                                    <Plus className="w-3.5 h-3.5 stroke-[3] shrink-0" />
                                   ) : (
-                                    <Package className="w-3 h-3" />
+                                    <Package className="w-3.5 h-3.5 shrink-0" />
                                   )}
                                   <span className="truncate">بالـ {u.name} {u.ratio > 1 ? `(${u.ratio})` : ''}</span>
                                 </span>
-                                <span className="font-mono font-black text-xs sm:text-sm text-slate-900 dark:text-white mt-0.5">
+                                <span className={`font-mono font-black text-xs sm:text-sm mt-0.5 ${priceColorClass}`}>
                                   {formatCurrency(price, currency)}
                                 </span>
                               </button>
@@ -1255,7 +1275,9 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
                         onClick={() => {
                           setTypingDelaySec(opt.val);
                           if (typeof window !== 'undefined') {
-                            localStorage.setItem('pos_search_typing_delay_sec', String(opt.val));
+                            try {
+                              localStorage.setItem('pos_search_typing_delay_sec', String(opt.val));
+                            } catch {}
                             // Sync preference immediately to Firestore for cross-device consistency
                             saveAppPreferencesToFirestore({ searchTypingDelaySec: opt.val }).catch((err) => {
                               console.warn('Could not sync preference to Firestore:', err);
