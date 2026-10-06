@@ -333,7 +333,7 @@ export const formatArabicDateOnly = (dateStr: string): string => {
  * - Unifies Taa Marbouta (ة -> ه)
  * - Unifies Yaa (ى -> ي)
  * - Removes Arabic diacritics (harakat / tashkeel) and tatweel (ـ)
- * - Strips common packaging tags in parentheses like (وحدتان), (3 وحدات), (قطعة), (كرتونة)
+ * - Preserves all words, flavor specs, numbers, and parenthetical qualifiers like (original), (شوكولاتة)
  * - Normalizes multiple spaces
  */
 export const normalizeArabicText = (str: string): string => {
@@ -345,7 +345,6 @@ export const normalizeArabicText = (str: string): string => {
     .replace(/ة/g, 'ه')
     .replace(/ى/g, 'ي')
     .replace(/[\u064B-\u065F\u0670ـ]/g, '') // remove tashkeel/diacritics and tatweel
-    .replace(/\s*\([^)]*\)\s*$/g, '') // strip trailing packaging like "(وحدتان)" or "(3 وحدات)"
     .replace(/\s+/g, ' ');
 };
 
@@ -357,11 +356,11 @@ export const normalizeArabicText = (str: string): string => {
 export const parseLocalizedNumber = (val: any): number => {
   if (val === undefined || val === null || val === '') return NaN;
   if (typeof val === 'number') return isNaN(val) ? NaN : val;
-  const str = String(val).trim();
+  let str = String(val).trim();
   if (!str) return NaN;
 
   // Convert Arabic-Indic & Persian numerals
-  const westernized = str
+  str = str
     .replace(/[٠۰]/g, '0')
     .replace(/[١۱]/g, '1')
     .replace(/[٢۲]/g, '2')
@@ -372,42 +371,213 @@ export const parseLocalizedNumber = (val: any): number => {
     .replace(/[٧۷]/g, '7')
     .replace(/[٨۸]/g, '8')
     .replace(/[٩۹]/g, '9')
-    .replace(/\s+/g, '') // remove spaces in numbers like "1 200"
-    .replace(/,/g, '.'); // convert decimal comma to period
+    .replace(/\s+/g, '') // remove spaces in numbers like "1 200" or "1 500,00"
+    .replace(/[^\d.,+\-eE]/g, ''); // strip currency symbols like د.ج, DA, DZD, $, etc.
 
-  // Handle scientific notation e.g. 6.281E+11 or direct numbers
-  const cleaned = westernized.replace(/[^0-9.eE+-]+/g, '');
-  const num = parseFloat(cleaned);
+  if (!str) return NaN;
+
+  const hasComma = str.includes(',');
+  const hasDot = str.includes('.');
+
+  if (hasComma && hasDot) {
+    const lastComma = str.lastIndexOf(',');
+    const lastDot = str.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      // European/French format: 1.250,50 -> strip dots, replace comma with dot -> 1250.50
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      // Standard US format: 1,250.50 -> strip commas -> 1250.50
+      str = str.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    // Only comma present
+    const parts = str.split(',');
+    if (parts.length > 2) {
+      // Multiple commas e.g. 1,000,000 -> thousands separator
+      str = str.replace(/,/g, '');
+    } else if (parts.length === 2) {
+      // Single comma: e.g. "0,75", "12,50", "1500,5" -> decimal comma
+      // If parts[1].length !== 3, it is definitely a decimal comma (e.g. 12,5 or 12,50)
+      if (parts[0] === '0' || parts[0] === '-0' || parts[1].length !== 3) {
+        str = str.replace(',', '.');
+      } else {
+        // Exactly 3 digits e.g. "1,000" or "1,500" or "25,000" -> thousands separator in financial sheets
+        str = str.replace(/,/g, '');
+      }
+    }
+  } else if (hasDot) {
+    // Only dot present
+    const parts = str.split('.');
+    if (parts.length > 2) {
+      // Multiple dots e.g. 1.000.000 -> thousands separator
+      str = str.replace(/\./g, '');
+    }
+  }
+
+  const num = parseFloat(str);
   return isNaN(num) ? NaN : num;
 };
 
 /**
  * Checks if an imported product matches an existing product in the database:
- * 1. Barcode match (handling leading zeros and length)
- * 2. Exact or normalized Arabic name match
- * 3. Substring matching when one name contains the other
+ * 1. Barcode match (case-insensitive, handling leading zeros):
+ *    - If BOTH products have barcodes:
+ *      - If barcodes match -> return true
+ *      - If barcodes differ -> return false (Conflicting barcodes can NEVER match!)
+ * 2. If at least one lacks a barcode:
+ *    - Match ONLY if normalized names are strictly equal (no partial substring false positives!)
  */
 export const areProductsMatching = (
   p1: { name?: string; barcode?: string },
   p2: { name?: string; barcode?: string }
 ): boolean => {
-  const b1 = (p1.barcode || '').trim().replace(/^0+/, '');
-  const b2 = (p2.barcode || '').trim().replace(/^0+/, '');
+  const b1 = (p1.barcode || '').trim().toLowerCase().replace(/^0+/, '');
+  const b2 = (p2.barcode || '').trim().toLowerCase().replace(/^0+/, '');
 
-  if (b1 && b2 && b1.length >= 4 && b2.length >= 4 && b1 === b2) {
-    return true;
+  // 1. If BOTH have non-empty barcodes:
+  if (b1 && b2) {
+    if (b1 === b2) return true;
+    // Different barcodes mean completely DIFFERENT products! Never match!
+    return false;
   }
 
+  // 2. Strict distinction for original vs standard products:
+  const raw1 = (p1.name || '').toLowerCase();
+  const raw2 = (p2.name || '').toLowerCase();
+  const isOriginal1 = raw1.includes('original') || raw1.includes('اصلي') || raw1.includes('أصلي');
+  const isOriginal2 = raw2.includes('original') || raw2.includes('اصلي') || raw2.includes('أصلي');
+  if (isOriginal1 !== isOriginal2) {
+    return false;
+  }
+
+  // 3. Match by exact normalized name
   const n1 = normalizeArabicText(p1.name || '');
   const n2 = normalizeArabicText(p2.name || '');
 
-  if (n1 && n2) {
-    if (n1 === n2) return true;
-    // If one is a complete substring of the other (e.g. "مصاصة ساشي" inside "مصاصة ساشي Bifa GOOD POP")
-    if (n1.length >= 6 && n2.length >= 6) {
-      if (n1.includes(n2) || n2.includes(n1)) return true;
-    }
+  if (n1 && n2 && n1 === n2) {
+    return true;
   }
 
   return false;
+};
+
+export interface PriceLossInfo {
+  hasLoss: boolean;
+  lossAmount: number;
+  lossPercentage: number;
+  lossUnit: string;
+  purchasePrice: number;
+  salePrice: number;
+}
+
+/**
+ * Accurately determines if a product has a negative profit margin / price loss
+ * (Purchase price > Sale price) across minor unit, major unit (carton), or middle unit.
+ */
+export const isProductPriceLoss = (prod?: {
+  purchasePriceMinor?: number;
+  salePriceMinor?: number;
+  purchasePriceMajor?: number;
+  salePriceMajor?: number;
+  purchasePriceMiddle?: number;
+  salePriceMiddle?: number;
+} | null): boolean => {
+  if (!prod) return false;
+
+  const pMinor = Number(prod.purchasePriceMinor) || 0;
+  const sMinor = Number(prod.salePriceMinor) || 0;
+  const pMajor = Number(prod.purchasePriceMajor) || 0;
+  const sMajor = Number(prod.salePriceMajor) || 0;
+  const pMid = Number(prod.purchasePriceMiddle) || 0;
+  const sMid = Number(prod.salePriceMiddle) || 0;
+
+  // 1. Major unit loss (Carton / Box)
+  if (pMajor > sMajor && sMajor > 0) return true;
+
+  // 2. Minor unit loss (Piece)
+  if (pMinor > sMinor && sMinor > 0) return true;
+
+  // 3. Middle unit loss
+  if (pMid > sMid && sMid > 0) return true;
+
+  return false;
+};
+
+/**
+ * Returns detailed price loss metrics for alert display and analytics.
+ */
+export const getProductPriceLossInfo = (prod?: {
+  name?: string;
+  majorUnit?: string;
+  minorUnit?: string;
+  middleUnit?: string;
+  piecesPerMajorUnit?: number;
+  purchasePriceMinor?: number;
+  salePriceMinor?: number;
+  purchasePriceMajor?: number;
+  salePriceMajor?: number;
+  purchasePriceMiddle?: number;
+  salePriceMiddle?: number;
+} | null): PriceLossInfo => {
+  if (!prod) {
+    return { hasLoss: false, lossAmount: 0, lossPercentage: 0, lossUnit: 'قطعة', purchasePrice: 0, salePrice: 0 };
+  }
+
+  const pMajor = Number(prod.purchasePriceMajor) || 0;
+  const sMajor = Number(prod.salePriceMajor) || 0;
+  const pMinor = Number(prod.purchasePriceMinor) || 0;
+  const sMinor = Number(prod.salePriceMinor) || 0;
+  const pMid = Number(prod.purchasePriceMiddle) || 0;
+  const sMid = Number(prod.salePriceMiddle) || 0;
+
+  // 1. Major unit loss (takes precedence for carton-packaged products)
+  if (pMajor > sMajor && sMajor > 0) {
+    const diff = +(pMajor - sMajor).toFixed(2);
+    const pct = pMajor > 0 ? +((diff / pMajor) * 100).toFixed(1) : 0;
+    return {
+      hasLoss: true,
+      lossAmount: diff,
+      lossPercentage: pct,
+      lossUnit: prod.majorUnit || 'كرتونة',
+      purchasePrice: pMajor,
+      salePrice: sMajor,
+    };
+  }
+
+  // 2. Minor unit loss
+  if (pMinor > sMinor && sMinor > 0) {
+    const diff = +(pMinor - sMinor).toFixed(2);
+    const pct = pMinor > 0 ? +((diff / pMinor) * 100).toFixed(1) : 0;
+    return {
+      hasLoss: true,
+      lossAmount: diff,
+      lossPercentage: pct,
+      lossUnit: prod.minorUnit || 'قطعة',
+      purchasePrice: pMinor,
+      salePrice: sMinor,
+    };
+  }
+
+  // 3. Middle unit loss
+  if (pMid > sMid && sMid > 0) {
+    const diff = +(pMid - sMid).toFixed(2);
+    const pct = pMid > 0 ? +((diff / pMid) * 100).toFixed(1) : 0;
+    return {
+      hasLoss: true,
+      lossAmount: diff,
+      lossPercentage: pct,
+      lossUnit: prod.middleUnit || 'علبة',
+      purchasePrice: pMid,
+      salePrice: sMid,
+    };
+  }
+
+  return {
+    hasLoss: false,
+    lossAmount: 0,
+    lossPercentage: 0,
+    lossUnit: prod.majorUnit || prod.minorUnit || 'قطعة',
+    purchasePrice: pMajor || pMinor || 0,
+    salePrice: sMajor || sMinor || 0,
+  };
 };

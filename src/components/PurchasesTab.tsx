@@ -367,15 +367,15 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
   return (
     <div className="space-y-4 pt-2 px-3 sm:px-4">
       {/* Top Action Bar */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
           <input
             type="text"
             placeholder="بحث برقم الفاتورة، اسم المورد، أو الصنف..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-9 pl-8 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
           />
           {searchQuery && (
             <button
@@ -387,26 +387,31 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
           )}
         </div>
 
-        {onOpenPaymentForSupplier && (
+        <div className="flex flex-wrap items-center gap-2 py-0.5 w-full sm:w-auto justify-start sm:justify-end">
+          {/* 1. New Purchase Invoice - PRIMARY & FIRST! */}
           <button
-            id="purchases-pay-supplier-btn"
-            onClick={() => onOpenPaymentForSupplier('')}
-            className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400 font-bold text-xs sm:text-sm px-3 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md shrink-0 active:scale-95 transition-all"
-            title="تسجيل سند صرف / دفعة لمورد"
+            id="new-purchase-invoice-btn"
+            onClick={() => openNewPurchase()}
+            style={{ color: '#ffffff' }}
+            className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-lg shadow-blue-600/30 shrink-0 active:scale-95 transition-all keep-white !text-white"
           >
-            <Wallet className="w-4 h-4 text-amber-400" />
-            <span>سند صرف / دفع لمورد</span>
+            <Plus className="w-4 h-4 shrink-0 text-white !text-white" style={{ color: '#ffffff' }} />
+            <span className="whitespace-nowrap text-white !text-white font-bold" style={{ color: '#ffffff' }}>فاتورة شراء</span>
           </button>
-        )}
 
-        <button
-          id="new-purchase-invoice-btn"
-          onClick={() => openNewPurchase()}
-          className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-lg shadow-blue-600/30 shrink-0 active:scale-95 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          <span>فاتورة شراء</span>
-        </button>
+          {/* 2. Pay Supplier Voucher Button */}
+          {onOpenPaymentForSupplier && (
+            <button
+              id="purchases-pay-supplier-btn"
+              onClick={() => onOpenPaymentForSupplier('')}
+              className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400 font-bold text-xs sm:text-sm px-3 sm:px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-md shrink-0 active:scale-95 transition-all"
+              title="تسجيل سند صرف / دفعة لمورد"
+            >
+              <Wallet className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="whitespace-nowrap">سند صرف / دفع لمورد</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Invoices List */}

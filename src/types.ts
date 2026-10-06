@@ -16,6 +16,7 @@ export interface Product {
   salePriceMajor: number;     // sale price per major unit
   stockPieces: number;        // total current stock count in minor pieces
   minStockAlert: number;      // threshold in pieces for low stock alert
+  expiryDate?: string;        // تاريخ انتهاء الصلاحية بتنسيق YYYY-MM-DD
   defaultSupplierId?: string; // default supplier ID
   defaultSupplierName?: string;
   notes?: string;

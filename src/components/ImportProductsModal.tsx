@@ -162,18 +162,41 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
 
   // Auto-detect matching headers with Arabic and English aliases
   const autoDetectColumnMapping = (headers: string[]): ColumnMapping => {
-    const findHeader = (aliases: string[]): string => {
-      const match = headers.find(h => {
-        const cleaned = h.toLowerCase().trim().replace(/[\s_\-\/\\]+/g, '');
-        return aliases.some(a => {
-          const aliasCleaned = a.toLowerCase().trim().replace(/[\s_\-\/\\]+/g, '');
-          return cleaned === aliasCleaned || cleaned.includes(aliasCleaned);
+    const cleanStr = (s: string) => s.toLowerCase().trim().replace(/[\s_\-\/\\]+/g, '');
+
+    const findHeader = (aliases: string[], exclusions: string[] = []): string => {
+      const cleanedExclusions = exclusions.map(cleanStr);
+
+      // Pass 1: Strict Exact Match across all headers
+      for (const a of aliases) {
+        const aliasCleaned = cleanStr(a);
+        const exactMatch = headers.find(h => {
+          const cleaned = cleanStr(h);
+          if (cleanedExclusions.some(ex => cleaned.includes(ex))) return false;
+          return cleaned === aliasCleaned;
         });
-      });
-      return match || '';
+        if (exactMatch) return exactMatch;
+      }
+
+      // Pass 2: Meaningful Substring Match with exclusions (ignoring short ambiguous generic words like "سعر")
+      for (const a of aliases) {
+        const aliasCleaned = cleanStr(a);
+        if (aliasCleaned.length < 3 || aliasCleaned === 'سعر' || aliasCleaned === 'السعر' || aliasCleaned === 'price' || aliasCleaned === 'prix') {
+          continue;
+        }
+
+        const match = headers.find(h => {
+          const cleaned = cleanStr(h);
+          if (cleanedExclusions.some(ex => cleaned.includes(ex))) return false;
+          return cleaned.includes(aliasCleaned) || aliasCleaned.includes(cleaned);
+        });
+        if (match) return match;
+      }
+
+      return '';
     };
 
-    return {
+    const mapping: ColumnMapping = {
       name: findHeader(['اسم الصنف', 'اسم المنتج', 'اسم_الصنف', 'الاسم', 'المنتج', 'السلعة', 'اسم السلعة', 'البيان', 'المادة', 'اسم المادة', 'name', 'product', 'item', 'title', 'designation', 'description']),
       barcode: findHeader(['الباركود', 'باركود', 'كود الصنف', 'الكود', 'كود', 'رمز', 'الرمز', 'رقم الباركود', 'barcode', 'code', 'sku', 'ean', 'upc', 'reference', 'ref']),
       category: findHeader(['التصنيف', 'القسم', 'الفئة', 'المجموعة', 'النوع', 'العائلة', 'category', 'cat', 'group', 'famille', 'type']),
@@ -183,13 +206,36 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
       minorUnit: findHeader(['الوحدة الصغرى', 'وحدة صغرى', 'القطعة', 'الحبة', 'الكيلو', 'minorunit', 'minor_unit', 'piece']),
       piecesPerMajorUnit: findHeader(['عدد القطع', 'عدد_القطع', 'عدد قطع', 'معامل التحويل', 'قطع الكرتونة', 'القطع بالكبرى', 'القطع', 'العدد', 'عدد', 'معامل', 'الكمية للعبوة', 'piecespermajor', 'pieces_per_major', 'pieces', 'ratio', 'unites_par_carton', 'qte_colis', 'colisage', 'nb_pieces']),
       piecesPerMiddleUnit: findHeader(['قطع الوسطى', 'قطع العلبة', 'قطع الباكت', 'قطع الباكيت', 'عدد قطع الوسطى', 'معامل الوسطى', 'pieces_middle', 'piecespermid', 'pieces_per_middle']),
-      purchasePriceMinor: findHeader(['سعر الشراء', 'سعر الشراء الجديد', 'سعر الشراء المستورد', 'سعر التكلفة', 'سعر التكلفة الجديد', 'شراء صغرى', 'سعر القطعة شراء', 'تكلفة القطعة', 'سعر الشراء د.ج', 'ثمن الشراء', 'التكلفة', 'شراء', 'سعر الشراء (التكلفة)', 'cost', 'purchaseprice', 'buy_price', 'prix_achat', 'p_achat']),
-      purchasePriceMiddle: findHeader(['سعر شراء الوسطى', 'سعر شراء العلبة', 'شراء وسطى', 'تكلفة الوسطى', 'purchase_middle', 'cost_middle', 'prix_achat_moyen']),
-      purchasePriceMajor: findHeader(['سعر شراء الكبرى', 'سعر شراء الكرتونة', 'شراء كبرى', 'تكلفة كبرى', 'purchase_major', 'carton_cost', 'prix_achat_carton']),
-      salePriceMinor: findHeader(['سعر البيع', 'سعر_البيع', 'السعر الجديد', 'سعر جديد', 'السعر المستورد', 'سعر البيع الجديد', 'سعر بيع التجزئة', 'سعر التجزئة', 'سعر القطعة بيع', 'سعر', 'السعر', 'ثمن البيع', 'سعر البيع د.ج', 'بيع', 'saleprice', 'sell_price', 'price', 'prix_vente', 'p_vente', 'prix']),
-      salePriceMiddle: findHeader(['سعر بيع الوسطى', 'سعر بيع العلبة', 'سعر بيع الباكت', 'سعر الوسطى', 'sale_middle', 'price_middle', 'prix_vente_moyen']),
-      salePriceMajor: findHeader(['سعر بيع الكبرى', 'سعر بيع الكرتونة', 'سعر كبرى', 'سعر الكرتونة', 'sale_major', 'carton_price', 'prix_gros']),
-      tierPrice: findHeader(['سعر 5 ومافوق', 'سعر 5 وما فوق', 'سعر 5', 'سعر5ومافوق', 'سعر الجملة', 'سعر جملة', 'wholesale_price', 'tier_price', 'prix_5']),
+      
+      purchasePriceMinor: findHeader(
+        ['سعر الشراء', 'سعر_الشراء', 'سعر شراء', 'ثمن الشراء', 'ثمن شراء', 'سعر التكلفة', 'سعر تكلفة', 'سعر الشراء (التكلفة)', 'التكلفة', 'تكلفة', 'شراء', 'شراء صغرى', 'شراء وحدة', 'سعر القطعة شراء', 'سعر شراء القطعة', 'سعر التكلفة للقطعة', 'تكلفة القطعة', 'سعر الشراء د.ج', 'سعر شراء دج', 'شراء د.ج', 'شراء دج', 'cost', 'purchase_price', 'purchaseprice', 'buy_price', 'prix_achat', 'p_achat', 'p.achat', 'p achat', 'prix achat', 'prix dachat', "prix d'achat", 'prix unitaire achat', 'pu achat', 'pa', 'p.a', 'cout'],
+        ['بيع', 'vente', 'sell', 'retail', 'عميل', 'زبون', 'client', 'كبرى', 'كرتونة', 'فاردو', 'carton', 'علبة', 'وسطى', '5ومافوق', 'مافوق', 'جملة']
+      ),
+      purchasePriceMiddle: findHeader(
+        ['سعر شراء الوسطى', 'سعر شراء العلبة', 'شراء وسطى', 'تكلفة الوسطى', 'purchase_middle', 'cost_middle', 'prix_achat_moyen'],
+        ['بيع', 'vente']
+      ),
+      purchasePriceMajor: findHeader(
+        ['سعر شراء الكبرى', 'سعر شراء الكرتونة', 'سعر شراء الفاردو', 'شراء كبرى', 'شراء كرتونة', 'تكلفة كبرى', 'purchase_major', 'carton_cost', 'prix_achat_carton', 'prix achat gros'],
+        ['بيع', 'vente']
+      ),
+      
+      salePriceMinor: findHeader(
+        ['سعر البيع', 'سعر_البيع', 'سعر بيع', 'ثمن البيع', 'ثمن بيع', 'بيع', 'سعر بيع التجزئة', 'سعر التجزئة', 'سعر تجزئة', 'تجزئة', 'سعر القطعة بيع', 'سعر بيع القطعة', 'سعر البيع للقطعة', 'بيع صغرى', 'بيع وحدة', 'سعر البيع د.ج', 'سعر بيع دج', 'بيع د.ج', 'بيع دج', 'سعر المستهلك', 'سعر الزبون', 'سعر العميل', 'سعر البيع الجديد', 'saleprice', 'sale_price', 'sell_price', 'prix_vente', 'p_vente', 'p.vente', 'p vente', 'prix vente', 'prix de vente', 'prix unitaire vente', 'pu vente', 'retail_price', 'prix detail', 'pv', 'p.v'],
+        ['شراء', 'تكلفة', 'achat', 'cost', 'buy', 'مورد', 'fournisseur', 'كبرى', 'كرتونة', 'فاردو', 'carton', 'علبة', 'وسطى', '5ومافوق', 'مافوق', 'جملة']
+      ),
+      salePriceMiddle: findHeader(
+        ['سعر بيع الوسطى', 'سعر بيع العلبة', 'سعر بيع الباكت', 'سعر الوسطى', 'sale_middle', 'price_middle', 'prix_vente_moyen'],
+        ['شراء', 'achat', 'تكلفة']
+      ),
+      salePriceMajor: findHeader(
+        ['سعر بيع الكبرى', 'سعر بيع الكرتونة', 'سعر بيع الفاردو', 'سعر كبرى', 'سعر الكرتونة', 'سعر الفاردو', 'سعر الكرتون', 'سعر الجملة', 'سعر جملة', 'جملة', 'sale_major', 'carton_price', 'prix_gros', 'prix gros'],
+        ['شراء', 'achat', 'تكلفة']
+      ),
+      tierPrice: findHeader(
+        ['سعر 5 ومافوق', 'سعر 5 وما فوق', 'سعر 5', 'سعر5ومافوق', 'سعر 5 فما فوق', 'سعر مافوق 5', 'سعر الجملة', 'سعر جملة', 'wholesale_price', 'tier_price', 'prix_5'],
+        ['شراء', 'تكلفة', 'cost', 'achat']
+      ),
       stockPieces: findHeader([
         'الرصيد', 'رصيد', 'المخزون', 'الكمية', 'الرصيد الحالي', 'الرصيد الافتتاحي', 
         'الكمية المتوفرة', 'الكمية بالمخزن', 'الرصيد الكلي', 'رصيد المخزن', 'المخزون الحالي', 
@@ -200,6 +246,26 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
       supplierName: findHeader(['المورد', 'اسم المورد', 'الشركة الموردة', 'supplier', 'fournisseur', 'vendor']),
       notes: findHeader(['ملاحظات', 'الوصف', 'تفاصيل', 'notes', 'remarques', 'comment']),
     };
+
+    // Strict validation: purchase and sale price columns must NEVER point to the same header!
+    if (mapping.purchasePriceMinor && mapping.salePriceMinor && mapping.purchasePriceMinor === mapping.salePriceMinor) {
+      const matchClean = cleanStr(mapping.purchasePriceMinor);
+      if (matchClean.includes('شراء') || matchClean.includes('تكلفة') || matchClean.includes('achat') || matchClean.includes('cost')) {
+        const altSale = headers.find(h => {
+          const c = cleanStr(h);
+          return (c.includes('بيع') || c.includes('vente') || c.includes('price')) && !c.includes('شراء') && !c.includes('5');
+        });
+        mapping.salePriceMinor = altSale || '';
+      } else {
+        const altPurchase = headers.find(h => {
+          const c = cleanStr(h);
+          return (c.includes('شراء') || c.includes('تكلفة') || c.includes('achat') || c.includes('cost')) && !c.includes('بيع');
+        });
+        mapping.purchasePriceMinor = altPurchase || '';
+      }
+    }
+
+    return mapping;
   };
 
   // Process File (Excel .xlsx, .xls, .csv)
@@ -333,8 +399,10 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
       rawRows.forEach((r) => {
         const nameVal = String(r[columnMapping.name] || '').trim();
         if (!nameVal) return;
-        // Group strictly by normalized Arabic product name so unit rows and spellings merge!
-        const key = normalizeArabicText(nameVal);
+        const norm = normalizeArabicText(nameVal);
+        const isOrig = norm.includes('original') || norm.includes('اصلي') || norm.includes('أصلي');
+        // Group rows that belong to the exact same product name, while strictly keeping (original) distinct
+        const key = `name_${norm}_${isOrig ? 'orig' : 'std'}`;
         
         if (!groupsMap.has(key)) {
           groupsMap.set(key, []);
@@ -481,6 +549,9 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
           sMajor = majRow.salePrice > 0 ? majRow.salePrice : (sMinor * piecesPerMajorUnit);
           pMajor = majRow.purchasePrice > 0 ? majRow.purchasePrice : (pMinor * piecesPerMajorUnit);
 
+          if (sMinor === 0 && sMajor > 0) sMinor = +(sMajor / piecesPerMajorUnit).toFixed(2);
+          if (pMinor === 0 && pMajor > 0) pMinor = +(pMajor / piecesPerMajorUnit).toFixed(2);
+
           const midStockPieces = (midRow.stock || 0) * piecesPerMiddleUnit;
           const majStockPieces = (majRow.stock || 0) * piecesPerMajorUnit;
           const pkgStockPieces = midStockPieces + majStockPieces;
@@ -500,26 +571,41 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
             tierNote = `سعر 5 فما فوق للـ${majorUnit}: ${majRow.tierPrice}`;
           }
         } else if (distinctPackaging.length === 1) {
-          // Dual units! (Minor, Major)
+          // Packaging row detected
           const majRow = distinctPackaging[0];
 
-          majorUnit = majRow.cleanUnit !== minorUnit ? majRow.cleanUnit : 'كرتونة';
-          piecesPerMajorUnit = majRow.ratio;
-          sMajor = majRow.salePrice > 0 ? majRow.salePrice : (sMinor * piecesPerMajorUnit);
-          pMajor = majRow.purchasePrice > 0 ? majRow.purchasePrice : (pMinor * piecesPerMajorUnit);
-
-          const majStockPieces = (majRow.stock || 0) * piecesPerMajorUnit;
-
-          // In POS exports (e.g. MS/ POS), the minor unit row (e.g. 23) represents total stock in pieces,
-          // while the carton row (e.g. 2) represents the integer carton count (20 pieces).
-          // If minorStock >= majStockPieces (23 >= 20), minorStock ALREADY contains the cartons!
-          if (minorStockInitial >= majStockPieces && minorStockInitial > 0) {
-            totalStockPieces = minorStockInitial;
-          } else if (minorStockInitial > 0 && minorStockInitial < piecesPerMajorUnit) {
-            // minorStock is just loose pieces (e.g. 3 loose pieces + 2 cartons = 23 pieces)
-            totalStockPieces = majStockPieces + minorStockInitial;
+          if (minorRows.length === 0) {
+            // There was NO separate minor row in the sheet!
+            // This row is a single unit product (e.g. carton or piece with its own purchase and sale price)
+            majorUnit = majRow.cleanUnit || 'كرتونة';
+            minorUnit = majorUnit;
+            piecesPerMajorUnit = 1;
+            sMajor = majRow.salePrice;
+            pMajor = majRow.purchasePrice;
+            sMinor = sMajor;
+            pMinor = pMajor;
+            totalStockPieces = majRow.stock;
           } else {
-            totalStockPieces = Math.max(minorStockInitial, majStockPieces);
+            majorUnit = majRow.cleanUnit !== minorUnit ? majRow.cleanUnit : 'كرتونة';
+            piecesPerMajorUnit = majRow.ratio;
+            sMajor = majRow.salePrice > 0 ? majRow.salePrice : (sMinor * piecesPerMajorUnit);
+            pMajor = majRow.purchasePrice > 0 ? majRow.purchasePrice : (pMinor * piecesPerMajorUnit);
+
+            if (sMinor === 0 && sMajor > 0) {
+              sMinor = +(sMajor / piecesPerMajorUnit).toFixed(2);
+            }
+            if (pMinor === 0 && pMajor > 0) {
+              pMinor = +(pMajor / piecesPerMajorUnit).toFixed(2);
+            }
+
+            const majStockPieces = (majRow.stock || 0) * piecesPerMajorUnit;
+            if (minorStockInitial >= majStockPieces && minorStockInitial > 0) {
+              totalStockPieces = minorStockInitial;
+            } else if (minorStockInitial > 0 && minorStockInitial < piecesPerMajorUnit) {
+              totalStockPieces = majStockPieces + minorStockInitial;
+            } else {
+              totalStockPieces = Math.max(minorStockInitial, majStockPieces);
+            }
           }
 
           if (majRow.tierPrice > 0) {
@@ -578,12 +664,12 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
           minorUnit: minorUnit,
           piecesPerMajorUnit: piecesPerMajorUnit,
           piecesPerMiddleUnit: piecesPerMiddleUnit,
-          purchasePriceMinor: Math.max(0, pMinor || 0),
+          purchasePriceMinor: Math.max(0, pMinor || pMajor || 0),
           purchasePriceMiddle: pMiddle !== undefined ? Math.max(0, pMiddle) : undefined,
-          purchasePriceMajor: Math.max(0, pMajor || 0),
-          salePriceMinor: Math.max(0, sMinor || 0),
+          purchasePriceMajor: Math.max(0, pMajor || pMinor || 0),
+          salePriceMinor: Math.max(0, sMinor || sMajor || 0),
           salePriceMiddle: sMiddle !== undefined ? Math.max(0, sMiddle) : undefined,
-          salePriceMajor: Math.max(0, sMajor || 0),
+          salePriceMajor: Math.max(0, sMajor || sMinor || 0),
           stockPieces: Math.max(0, totalStockPieces || 0),
           minStockAlert: Math.max(0, minAlert || 0),
           defaultSupplierId: matchedSupplier ? matchedSupplier.id : (existingMatch?.defaultSupplierId || ''),
@@ -615,6 +701,10 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
       const barcodeVal = columnMapping.barcode ? String(rawRow[columnMapping.barcode] || '').trim() : '';
       const rawCat = columnMapping.category ? String(rawRow[columnMapping.category] || '').trim() : '';
       const categoryVal = classifyProductCategory(nameVal, rawCat);
+      
+      const existingMatch = existingProducts.find(
+        p => areProductsMatching({ name: nameVal, barcode: barcodeVal }, p)
+      );
       
       // Unit extraction - do not invent "كرتونة" if not present in the sheet
       const rawUnitVal = columnMapping.unit && rawRow[columnMapping.unit] ? cleanUnitString(rawRow[columnMapping.unit], '') : '';
@@ -680,11 +770,13 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
         sMiddle = sMinor * (piecesPerMiddleUnit || 1);
       }
 
-      // Purchase Prices - take directly as-is without any math or artificial markup
+      // Purchase Prices - preserve sheet values and fallback to existing product prices if sheet cell is empty/zero
       const parsedPMinor = columnMapping.purchasePriceMinor ? parseNumberDirect(rawRow[columnMapping.purchasePriceMinor]) : NaN;
       const parsedPMajor = columnMapping.purchasePriceMajor ? parseNumberDirect(rawRow[columnMapping.purchasePriceMajor]) : NaN;
-      const pMinor = !isNaN(parsedPMinor) ? parsedPMinor : (!isNaN(parsedPMajor) ? parsedPMajor : 0);
-      const pMajor = !isNaN(parsedPMajor) ? parsedPMajor : pMinor;
+      const rawPMin = !isNaN(parsedPMinor) && parsedPMinor > 0 ? parsedPMinor : 0;
+      const rawPMaj = !isNaN(parsedPMajor) && parsedPMajor > 0 ? parsedPMajor : 0;
+      const pMinor = rawPMin > 0 ? rawPMin : (rawPMaj > 0 ? rawPMaj : (existingMatch?.purchasePriceMinor || existingMatch?.purchasePriceMajor || 0));
+      const pMajor = rawPMaj > 0 ? rawPMaj : (rawPMin > 0 ? rawPMin : (existingMatch?.purchasePriceMajor || existingMatch?.purchasePriceMinor || 0));
 
       if (hasThreeUnits && pMiddle === undefined) {
         pMiddle = pMinor * (piecesPerMiddleUnit || 1);
@@ -715,10 +807,6 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
       if (!nameVal) {
         errorMessages.push('اسم الصنف مفقود');
       }
-
-      const existingMatch = existingProducts.find(
-        p => areProductsMatching({ name: nameVal, barcode: barcodeVal }, p)
-      );
 
       const generatedBarcode = barcodeVal || (existingMatch ? existingMatch.barcode : `628${Math.floor(100000000 + Math.random() * 900000000)}`);
 
@@ -764,15 +852,15 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
 
   // Load Preset Matching POS Sheet with 1-unit, 2-unit, and 3-unit examples
   const handleLoadPOSPresetDemo = () => {
-    const samplePasted = `الاسم\tالكود\tالوحدة\tعدد القطع\tسعر البيع\tالرصيد\tسعر 5 ومافوق
-بسكويت أوريو الأصلي\t628100777\tMS/ قطعة\t1\t50\t100\t0
-بسكويت أوريو الأصلي\t628100777\tMS/ باكت 12 قطعة\t12\t550\t10\t520
-بسكويت أوريو الأصلي\t628100777\tMS/ كرتونة 72 قطعة\t72\t3100\t2\t3000
-مصاصة ساشي Bifa GOOD POP\t628100123\tMS/ قطعة\t1\t270\t0\t0
-مصاصة ساشي Bifa GOOD POP\t628100123\tMS/ فاردو Sachi 10\t10\t2500\t0\t0
-شوكولاتة نوتيلا ميني 30 غرام\t628100456\tMS/ قطعة\t1\t120\t50\t0
-شوكولاتة نوتيلا ميني 30 غرام\t628100456\tMS/ كرتونة 24\t24\t2600\t2\t2500
-حليب مكثف محلى نستله 395غ\t628100999\tMS/ حبة\t1\t450\t25\t0`;
+    const samplePasted = `الاسم\tالكود\tالوحدة\tعدد القطع\tسعر الشراء\tسعر البيع\tالرصيد\tسعر 5 ومافوق
+بسكويت أوريو الأصلي\t628100777\tMS/ قطعة\t1\t38\t50\t100\t0
+بسكويت أوريو الأصلي\t628100777\tMS/ باكت 12 قطعة\t12\t420\t550\t10\t520
+بسكويت أوريو الأصلي\t628100777\tMS/ كرتونة 72 قطعة\t72\t2400\t3100\t2\t3000
+مصاصة ساشي Bifa GOOD POP\t628100123\tMS/ قطعة\t1\t200\t270\t0\t0
+مصاصة ساشي Bifa GOOD POP\t628100123\tMS/ فاردو Sachi 10\t10\t1950\t2500\t0\t0
+شوكولاتة نوتيلا ميني 30 غرام\t628100456\tMS/ قطعة\t1\t90\t120\t50\t0
+شوكولاتة نوتيلا ميني 30 غرام\t628100456\tMS/ كرتونة 24\t24\t2100\t2600\t2\t2500
+حليب مكثف محلى نستله 395غ\t628100999\tMS/ حبة\t1\t350\t450\t25\t0`;
 
     setPastedText(samplePasted);
   };
@@ -825,6 +913,40 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
     });
   };
 
+  // Change sale price of a specific row directly in the preview table
+  const handleRowSalePriceChange = (idx: number, newPrice: number) => {
+    setProcessedRows(prev => {
+      const copy = [...prev];
+      if (copy[idx]) {
+        copy[idx] = {
+          ...copy[idx],
+          mapped: {
+            ...copy[idx].mapped,
+            salePriceMinor: Math.max(0, newPrice),
+          },
+        };
+      }
+      return copy;
+    });
+  };
+
+  // Change purchase price of a specific row directly in the preview table
+  const handleRowPurchasePriceChange = (idx: number, newPrice: number) => {
+    setProcessedRows(prev => {
+      const copy = [...prev];
+      if (copy[idx]) {
+        copy[idx] = {
+          ...copy[idx],
+          mapped: {
+            ...copy[idx].mapped,
+            purchasePriceMinor: Math.max(0, newPrice),
+          },
+        };
+      }
+      return copy;
+    });
+  };
+
   // Execute Bulk Import
   const handleExecuteImport = () => {
     const selectedValidRows = processedRows.filter(r => r.selected && !r.hasErrors);
@@ -851,6 +973,7 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
         'الكود': '628100777111',
         'الوحدة': 'MS/ قطعة',
         'عدد القطع': 1,
+        'سعر الشراء': 38,
         'سعر البيع': 50,
         'الرصيد': 100,
         'سعر 5 ومافوق': 0
@@ -860,6 +983,7 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
         'الكود': '628100777111',
         'الوحدة': 'MS/ باكت 12 قطعة',
         'عدد القطع': 12,
+        'سعر الشراء': 420,
         'سعر البيع': 550,
         'الرصيد': 10,
         'سعر 5 ومافوق': 520
@@ -869,6 +993,7 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
         'الكود': '628100777111',
         'الوحدة': 'MS/ كرتونة 72 قطعة',
         'عدد القطع': 72,
+        'سعر الشراء': 2400,
         'سعر البيع': 3100,
         'الرصيد': 2,
         'سعر 5 ومافوق': 3000
@@ -878,6 +1003,7 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
         'الكود': '628100123456',
         'الوحدة': 'MS/ قطعة',
         'عدد القطع': 1,
+        'سعر الشراء': 200,
         'سعر البيع': 270,
         'الرصيد': 0,
         'سعر 5 ومافوق': 0
@@ -887,6 +1013,7 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
         'الكود': '628100123456',
         'الوحدة': 'MS/ فاردو Sachi 10',
         'عدد القطع': 10,
+        'سعر الشراء': 1950,
         'سعر البيع': 2500,
         'الرصيد': 0,
         'سعر 5 ومافوق': 0
@@ -896,6 +1023,7 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
         'الكود': '628100999888',
         'الوحدة': 'MS/ حبة',
         'عدد القطع': 1,
+        'سعر الشراء': 350,
         'سعر البيع': 450,
         'الرصيد': 25,
         'سعر 5 ومافوق': 0
@@ -1210,15 +1338,36 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
                 </select>
               </div>
 
-              {/* Sale Price */}
-              <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
-                <label className="text-emerald-400 font-bold block">سعر البيع</label>
+              {/* Purchase Price (Cost) */}
+              <div className="bg-slate-850 p-3 rounded-2xl border border-amber-500/40 space-y-1">
+                <label className="text-amber-400 font-bold block flex items-center justify-between">
+                  <span>سعر الشراء (التكلفة)</span>
+                  <span className="text-[10px] text-slate-400 font-normal">دقيق ومطابق</span>
+                </label>
+                <select
+                  value={columnMapping.purchasePriceMinor}
+                  onChange={(e) => setColumnMapping({ ...columnMapping, purchasePriceMinor: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-amber-500"
+                >
+                  <option value="">-- اختياري (عمود سعر الشراء/التكلفة) --</option>
+                  {rawHeaders.map(h => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sale Price (Retail) */}
+              <div className="bg-slate-850 p-3 rounded-2xl border border-emerald-500/40 space-y-1">
+                <label className="text-emerald-400 font-bold block flex items-center justify-between">
+                  <span>سعر البيع (التجزئة)</span>
+                  <span className="text-[10px] text-slate-400 font-normal">دقيق ومطابق</span>
+                </label>
                 <select
                   value={columnMapping.salePriceMinor}
                   onChange={(e) => setColumnMapping({ ...columnMapping, salePriceMinor: e.target.value })}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-emerald-500"
                 >
-                  <option value="">-- اختر عمود سعر البيع --</option>
+                  <option value="">-- اختر عمود سعر البيع/التجزئة --</option>
                   {rawHeaders.map(h => (
                     <option key={h} value={h}>{h}</option>
                   ))}
@@ -1249,21 +1398,6 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-emerald-500"
                 >
                   <option value="">-- اختر عمود الرصيد --</option>
-                  {rawHeaders.map(h => (
-                    <option key={h} value={h}>{h}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Purchase Price */}
-              <div className="bg-slate-850 p-3 rounded-2xl border border-slate-800 space-y-1">
-                <label className="text-amber-400 font-bold block">سعر الشراء (التكلفة)</label>
-                <select
-                  value={columnMapping.purchasePriceMinor}
-                  onChange={(e) => setColumnMapping({ ...columnMapping, purchasePriceMinor: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="">-- اختياري (إن وجد) --</option>
                   {rawHeaders.map(h => (
                     <option key={h} value={h}>{h}</option>
                   ))}
@@ -1478,7 +1612,8 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
                     <th className="p-2.5">القسم / التصنيف</th>
                     <th className="p-2.5">الباركود / الكود</th>
                     <th className="p-2.5">الوحدات والتعبئة</th>
-                    <th className="p-2.5">سعر التجزئة</th>
+                    <th className="p-2.5 text-amber-400">سعر الشراء (التكلفة)</th>
+                    <th className="p-2.5 text-emerald-400">سعر البيع (التجزئة)</th>
                     <th className="p-2.5">سعر الكبرى/الجملة</th>
                     <th className="p-2.5">الرصيد الإجمالي</th>
                     <th className="p-2.5">الحالة</th>
@@ -1545,9 +1680,45 @@ export const ImportProductsModal: React.FC<ImportProductsModalProps> = ({
                             </span>
                           )}
                         </td>
-                        <td className="p-2.5 font-bold text-emerald-400">
-                          {formatCurrency(row.mapped.salePriceMinor || 0, currency)}
+
+                        {/* Purchase Price (Editable directly for 100% precision) */}
+                        <td className="p-2.5">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={row.mapped.purchasePriceMinor !== undefined ? row.mapped.purchasePriceMinor : 0}
+                              onChange={(e) => {
+                                const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                handleRowPurchasePriceChange(origIndex, val);
+                              }}
+                              className="w-20 bg-slate-800 border border-amber-500/50 rounded-lg px-2 py-1 text-amber-300 font-black text-xs focus:ring-1 focus:ring-amber-400 focus:outline-none"
+                              title="سعر الشراء والتكلفة (مطابق للشيت)"
+                            />
+                            <span className="text-[10px] text-slate-400 font-semibold">{currency}</span>
+                          </div>
                         </td>
+
+                        {/* Sale Price (Editable directly for 100% precision) */}
+                        <td className="p-2.5">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={row.mapped.salePriceMinor !== undefined ? row.mapped.salePriceMinor : 0}
+                              onChange={(e) => {
+                                const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                handleRowSalePriceChange(origIndex, val);
+                              }}
+                              className="w-20 bg-slate-800 border border-emerald-500/50 rounded-lg px-2 py-1 text-emerald-300 font-black text-xs focus:ring-1 focus:ring-emerald-400 focus:outline-none"
+                              title="سعر البيع والتجزئة (مطابق للشيت)"
+                            />
+                            <span className="text-[10px] text-slate-400 font-semibold">{currency}</span>
+                          </div>
+                        </td>
+
                         <td className="p-2.5 text-slate-300 font-semibold">
                           {row.mapped.middleUnit && row.mapped.salePriceMiddle ? (
                             <div className="text-[11px] leading-tight space-y-0.5">

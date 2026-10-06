@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Product, ThemeMode } from '../types';
 import { soundEffects } from '../utils/soundEffects';
+import { isProductPriceLoss } from '../utils/calculations';
 
 interface HeaderProps {
   products: Product[];
@@ -99,8 +100,16 @@ export const Header: React.FC<HeaderProps> = ({
     }, 2800);
   };
 
-  // Calculate low stock items count
+  // Calculate urgent alerts across: 1. Price Loss (Purchase > Sale), 2. Low Stock, 3. Expiry
+  const priceLossCount = products.filter(p => isProductPriceLoss(p)).length;
   const lowStockCount = products.filter(p => p.stockPieces <= p.minStockAlert).length;
+  const expiryCount = products.filter(p => {
+    if (!p.expiryDate || !p.expiryDate.trim()) return false;
+    const expDate = new Date(p.expiryDate);
+    const diffDays = Math.ceil((expDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return diffDays <= 30;
+  }).length;
+  const totalAlertsCount = priceLossCount + lowStockCount + expiryCount;
 
   return (
     <header 
@@ -192,26 +201,26 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
-          {/* Low Stock Alert Button - Professional Danger Red */}
+          {/* Inventory & Pricing Alerts Button - Professional Danger Crimson */}
           <button
             id="low-stock-alert-btn"
             onClick={onOpenAlerts}
             style={{ backdropFilter: 'blur(3.5px)', WebkitBackdropFilter: 'blur(3.5px)' }}
             className={`relative p-1.5 sm:p-2 rounded-xl border transition-all flex items-center justify-center shrink-0 cursor-pointer active:scale-95 ${
-              lowStockCount > 0
-                ? 'bg-red-500/15 dark:bg-red-500/20 border-red-500/50 text-red-600 dark:text-red-400 shadow-[0_0_12px_rgba(239,68,68,0.3)]'
-                : 'bg-red-500/10 border-red-400/20 text-red-400/70 hover:text-red-500 hover:bg-red-500/15'
+              totalAlertsCount > 0
+                ? 'bg-rose-500/15 dark:bg-rose-500/20 border-rose-500/50 text-rose-600 dark:text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.35)]'
+                : 'bg-rose-500/10 border-rose-400/20 text-rose-400/70 hover:text-rose-500 hover:bg-rose-500/15'
             }`}
-            title="تنبيهات نقص المخزون"
+            title={`مركز التنبيهات الذكية: ${totalAlertsCount} تنبيه (خسارة أسعار: ${priceLossCount} | نقص مخزون: ${lowStockCount} | صلاحية: ${expiryCount})`}
           >
-            <Bell className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
-            {lowStockCount > 0 && (
+            <Bell className={`w-4 h-4 sm:w-4.5 sm:h-4.5 ${priceLossCount > 0 ? 'animate-bounce' : ''}`} />
+            {totalAlertsCount > 0 && (
               <span 
-                className="keep-white absolute -top-1 -right-1 px-1.5 min-w-[18px] h-4.5 rounded-full bg-gradient-to-r from-red-600 to-rose-600 text-white !text-white text-[9px] sm:text-[10px] font-black flex items-center justify-center shadow-md shadow-red-600/40 animate-pulse border border-white/50 dark:border-black select-none"
+                className="keep-white absolute -top-1 -right-1 px-1.5 min-w-[18px] h-4.5 rounded-full bg-gradient-to-r from-rose-600 to-red-600 text-white !text-white text-[9px] sm:text-[10px] font-black flex items-center justify-center shadow-md shadow-rose-600/40 animate-pulse border border-white/50 dark:border-black select-none"
                 style={{ color: '#ffffff' }}
                 dir="ltr"
               >
-                {lowStockCount > 99 ? '99+' : lowStockCount}
+                {totalAlertsCount > 99 ? '99+' : totalAlertsCount}
               </span>
             )}
           </button>

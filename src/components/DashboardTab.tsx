@@ -6,13 +6,16 @@ import {
   AlertTriangle, 
   ChevronLeft, 
   PlusCircle, 
-  Truck,
-  ArrowUpRight,
-  DollarSign,
-  FileSpreadsheet
+  Truck, 
+  ArrowUpRight, 
+  DollarSign, 
+  FileSpreadsheet,
+  ShieldAlert,
+  TrendingDown,
+  CalendarX
 } from 'lucide-react';
 import { Product, SaleInvoice, PurchaseInvoice } from '../types';
-import { formatCurrency } from '../utils/calculations';
+import { formatCurrency, isProductPriceLoss } from '../utils/calculations';
 
 interface DashboardTabProps {
   products: Product[];
@@ -20,7 +23,7 @@ interface DashboardTabProps {
   purchases: PurchaseInvoice[];
   currency: string;
   setActiveTab: (tab: any) => void;
-  onOpenAlerts: () => void;
+  onOpenAlerts: (tab?: 'all' | 'pricing' | 'stock' | 'expiry') => void;
   onQuickNewSale: () => void;
   onQuickNewPurchase: () => void;
   onQuickNewProduct: () => void;
@@ -44,11 +47,24 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const totalStockPieces = products.reduce((acc, p) => acc + p.stockPieces, 0);
   
   // Valuation
-  const totalInventoryCost = products.reduce((acc, p) => acc + (p.costPrice * p.stockPieces), 0);
-  const totalInventoryRetail = products.reduce((acc, p) => acc + (p.sellingPrice * p.stockPieces), 0);
+  const totalInventoryCost = products.reduce((acc, p) => acc + ((p.purchasePriceMinor || 0) * p.stockPieces), 0);
+  const totalInventoryRetail = products.reduce((acc, p) => acc + ((p.salePriceMinor || 0) * p.stockPieces), 0);
 
-  // Urgent alerts
+  // Urgent alerts analysis:
+  // 1. Price Loss (Purchase Price > Sale Price)
+  const priceLossProducts = products.filter(p => isProductPriceLoss(p));
+  // 2. Low Stock (At or below reorder threshold)
   const lowStockProducts = products.filter(p => p.stockPieces <= p.minStockAlert);
+  // 3. Expiry Date (Expired or within 30 days)
+  const now = Date.now();
+  const expiryProducts = products.filter(p => {
+    if (!p.expiryDate || !p.expiryDate.trim()) return false;
+    const expDate = new Date(p.expiryDate).getTime();
+    const diffDays = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
+    return diffDays <= 30;
+  });
+
+  const totalUrgentAlerts = priceLossProducts.length + lowStockProducts.length + expiryProducts.length;
 
   return (
     <div className="space-y-3.5 sm:space-y-5 p-3 sm:p-4 max-w-4xl mx-auto">
@@ -82,15 +98,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <button
             id="quick-purchase-btn"
             onClick={onQuickNewPurchase}
-            className="flex flex-col items-center justify-center py-3 px-2 rounded-2xl bg-blue-500/10 hover:bg-blue-500/20 dark:bg-blue-600/15 dark:hover:bg-blue-600/25 border border-blue-400/40 text-blue-600 dark:text-blue-300 font-black text-xs transition-all active:scale-95 group shadow-sm cursor-pointer"
+            className="flex flex-col items-center justify-center py-3 px-2 rounded-2xl bg-blue-600 hover:bg-blue-500 border border-blue-500 text-white font-black text-xs transition-all active:scale-95 group shadow-sm cursor-pointer keep-white"
           >
             <div 
               style={{ backdropFilter: 'blur(3.5px)', WebkitBackdropFilter: 'blur(3.5px)' }}
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-blue-400/40 bg-blue-500/20 text-blue-600 dark:text-blue-300 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform shadow-[0_0_10px_rgba(59,130,246,0.25)]"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-blue-400/50 bg-blue-500/80 text-white flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform shadow-[0_0_10px_rgba(59,130,246,0.35)]"
             >
-              <Truck className="w-5 h-5 text-blue-600 dark:text-blue-300" />
+              <Truck className="w-5 h-5 text-white" />
             </div>
-            <span className="font-extrabold">فاتورة شراء</span>
+            <span className="font-extrabold text-white !text-white">فاتورة شراء</span>
           </button>
 
           {/* Quick Product - Mauve Violet */}
@@ -129,59 +145,110 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <ChevronLeft className="w-4 h-4 text-rose-500 dark:text-rose-400 group-hover:-translate-x-1 transition-transform" />
           </button>
 
-          {/* Quick Sheet Import - Teal / Sky */}
+          {/* Quick Sheet Import - Grey Icon + Golden Yellow Name */}
           <button
             id="quick-import-sheet-btn"
             onClick={() => setActiveTab('products')}
-            className="col-span-3 flex items-center justify-between p-3 rounded-2xl bg-slate-900/90 border border-teal-500/25 hover:border-teal-400/50 text-teal-500 dark:text-teal-300 font-bold text-xs transition-all active:scale-[0.99] group shadow-sm cursor-pointer"
+            className="col-span-3 flex items-center justify-between p-3 rounded-2xl bg-slate-900/90 border border-slate-700/70 hover:border-amber-400/50 text-slate-200 font-bold text-xs transition-all active:scale-[0.99] group shadow-sm cursor-pointer"
           >
             <div className="flex items-center gap-3">
               <div 
                 style={{ backdropFilter: 'blur(3.5px)', WebkitBackdropFilter: 'blur(3.5px)' }}
-                className="w-8 h-8 rounded-xl border border-teal-400/40 bg-teal-500/20 text-teal-500 dark:text-teal-300 flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(20,184,166,0.2)]"
+                className="w-8 h-8 rounded-xl border border-slate-600/60 bg-slate-800/80 text-slate-400 flex items-center justify-center shrink-0 shadow-sm"
               >
-                <FileSpreadsheet className="w-4 h-4" />
+                <FileSpreadsheet className="w-4 h-4 text-slate-400 shrink-0" style={{ color: '#94a3b8', stroke: '#94a3b8' }} />
               </div>
               <div className="text-right">
-                <span className="text-slate-100 font-extrabold block text-xs sm:text-sm">استيراد الأصناف من الشيت (Excel / Google Sheets)</span>
+                <span className="font-extrabold block text-xs sm:text-sm text-amber-400 dark:text-amber-300" style={{ color: '#fbbf24' }}>استيراد الأصناف من الشيت (Excel / Google Sheets)</span>
                 <span className="text-xs text-slate-400 font-medium block mt-0.5">رفع ملف الشيت أو اللصق المباشر ومطابقة الأعمدة فوراً</span>
               </div>
             </div>
-            <ChevronLeft className="w-4 h-4 text-teal-500 dark:text-teal-400 group-hover:-translate-x-1 transition-transform" />
+            <ChevronLeft className="w-4 h-4 text-slate-400 group-hover:text-amber-400 group-hover:-translate-x-1 transition-all" />
           </button>
         </div>
       </div>
 
-      {/* Low Stock Urgent Bento Banner - Professional Danger Red */}
-      {lowStockProducts.length > 0 && (
+      {/* Multi-Category Urgent Alerts Banner - Professional Risk Center */}
+      {totalUrgentAlerts > 0 && (
         <div 
-          onClick={onOpenAlerts}
-          className="cursor-pointer bg-gradient-to-r from-red-500/10 via-red-500/5 to-rose-500/10 dark:from-red-950/40 dark:via-red-900/20 dark:to-transparent border border-red-500/40 hover:border-red-500 dark:border-red-500/40 dark:hover:border-red-400/70 rounded-2xl p-4 flex items-center justify-between shadow-md shadow-red-500/5 transition-all group active:scale-[0.99]"
+          onClick={() => onOpenAlerts('all')}
+          className="cursor-pointer bg-gradient-to-r from-rose-500/10 via-amber-500/5 to-purple-500/10 dark:from-rose-950/40 dark:via-amber-950/20 dark:to-purple-950/20 border border-rose-500/40 hover:border-rose-400 dark:border-rose-500/40 dark:hover:border-rose-400/80 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md shadow-rose-500/5 transition-all group active:scale-[0.99]"
         >
-          <div className="flex items-center gap-3.5 min-w-0 flex-1">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div 
               style={{ backdropFilter: 'blur(3.5px)', WebkitBackdropFilter: 'blur(3.5px)' }}
-              className="w-11 h-11 rounded-2xl bg-red-500/15 dark:bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center border border-red-500/35 shrink-0 group-hover:scale-105 transition-transform shadow-[0_0_12px_rgba(239,68,68,0.25)]"
+              className="w-11 h-11 rounded-2xl bg-rose-500/20 text-rose-500 dark:text-rose-400 flex items-center justify-center border border-rose-500/35 shrink-0 group-hover:scale-105 transition-transform shadow-[0_0_12px_rgba(244,63,94,0.3)]"
             >
-              <AlertTriangle className="w-5 h-5 animate-pulse" />
+              <ShieldAlert className="w-5 h-5 animate-pulse" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="stock-alert-title font-black text-sm sm:text-base text-black dark:text-white">تنبيه انخفاض المخزون</h3>
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <h3 className="stock-alert-title font-black text-sm sm:text-base text-black dark:text-white">
+                  مركز الرقابة والتنبيهات العاجلة
+                </h3>
                 <span 
-                  className="keep-white bg-gradient-to-r from-red-600 to-rose-600 text-white !text-white text-xs px-2.5 py-0.5 rounded-full font-black shadow-sm shadow-red-500/30 animate-pulse select-none"
+                  className="keep-white bg-gradient-to-r from-rose-600 to-red-600 text-white !text-white text-xs px-2.5 py-0.5 rounded-full font-black shadow-sm shadow-rose-500/30 animate-pulse select-none"
                   style={{ color: '#ffffff' }}
                 >
-                  {lowStockProducts.length} أصناف
+                  {totalUrgentAlerts} تنبيه نشط
                 </span>
               </div>
-              <p className="stock-alert-desc text-xs font-bold mt-1 truncate text-black dark:text-white">
-                تجاوزت الحد الأدنى: {lowStockProducts.slice(0, 3).map(p => p.name).join('، ')}{lowStockProducts.length > 3 ? '...' : ''}
-              </p>
+
+              {/* Segmented Quick Alert Pills */}
+              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                {priceLossProducts.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenAlerts('pricing');
+                    }}
+                    className="keep-white bg-rose-600 hover:bg-rose-500 text-white !text-white text-[11px] font-black px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-xs transition-transform active:scale-95 cursor-pointer"
+                    style={{ color: '#ffffff' }}
+                    title="أصناف سعر شرائها أعلى من سعر بيعها"
+                  >
+                    <TrendingDown className="w-3 h-3 text-white" />
+                    <span>خسارة أسعار ({priceLossProducts.length})</span>
+                  </button>
+                )}
+
+                {lowStockProducts.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenAlerts('stock');
+                    }}
+                    className="keep-white bg-amber-600 hover:bg-amber-500 text-white !text-white text-[11px] font-black px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-xs transition-transform active:scale-95 cursor-pointer"
+                    style={{ color: '#ffffff' }}
+                    title="أصناف وصلت أو تجاوزت حد الطلب"
+                  >
+                    <AlertTriangle className="w-3 h-3 text-white" />
+                    <span>نقص المخزون ({lowStockProducts.length})</span>
+                  </button>
+                )}
+
+                {expiryProducts.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenAlerts('expiry');
+                    }}
+                    className="keep-white bg-purple-600 hover:bg-purple-500 text-white !text-white text-[11px] font-black px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-xs transition-transform active:scale-95 cursor-pointer"
+                    style={{ color: '#ffffff' }}
+                    title="أصناف منتهية الصلاحية أو قاربت على الانتهاء"
+                  >
+                    <CalendarX className="w-3 h-3 text-white" />
+                    <span>تواريخ الصلاحية ({expiryProducts.length})</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-          <div className="stock-alert-action flex items-center gap-1 text-xs font-black shrink-0 mr-2 text-black dark:text-white">
-            <span className="hidden sm:inline">مراجعة النواقص</span>
+
+          <div className="stock-alert-action flex items-center gap-1 text-xs font-black shrink-0 self-end sm:self-center text-black dark:text-white">
+            <span className="hidden sm:inline">معاينة ومعالجة</span>
             <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform text-black dark:text-white" />
           </div>
         </div>

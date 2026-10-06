@@ -577,15 +577,15 @@ export const SalesTab: React.FC<SalesTabProps> = ({
   return (
     <div className="space-y-4 pt-2 px-3 sm:px-4">
       {/* Top Action Bar */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
           <input
             type="text"
             placeholder="بحث برقم الفاتورة، اسم العميل، أو الصنف..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-9 pl-8 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
           />
           {searchQuery && (
             <button
@@ -597,27 +597,30 @@ export const SalesTab: React.FC<SalesTabProps> = ({
           )}
         </div>
 
-        {onReturnToCustomers && (
+        <div className="flex flex-wrap items-center gap-2 py-0.5 w-full sm:w-auto justify-start sm:justify-end">
+          {/* 1. New Sale Invoice - PRIMARY & FIRST! */}
           <button
-            type="button"
-            onClick={onReturnToCustomers}
-            className="bg-slate-800 hover:bg-slate-750 text-emerald-300 border border-emerald-500/30 font-bold text-xs sm:text-sm px-3 py-2.5 rounded-xl flex items-center gap-1.5 shrink-0 active:scale-95 transition-all shadow-xs"
-            title="الرجوع لنافذة العملاء والشركاء"
+            id="new-sale-invoice-btn"
+            onClick={openNewSale}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 shrink-0 active:scale-95 transition-all keep-white"
           >
-            <ArrowRight className="w-4 h-4 text-emerald-400" />
-            <span className="hidden sm:inline">نافذة العملاء</span>
-            <span className="sm:hidden">العملاء</span>
+            <Plus className="w-4 h-4 shrink-0 text-white" />
+            <span className="whitespace-nowrap text-white font-bold">فاتورة جديدة</span>
           </button>
-        )}
 
-        <button
-          id="new-sale-invoice-btn"
-          onClick={openNewSale}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 shrink-0 active:scale-95 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          <span>فاتورة جديدة</span>
-        </button>
+          {/* 2. Return to Customers Button */}
+          {onReturnToCustomers && (
+            <button
+              type="button"
+              onClick={onReturnToCustomers}
+              className="bg-slate-800 hover:bg-slate-750 text-emerald-300 border border-emerald-500/30 font-bold text-xs sm:text-sm px-3 py-2 rounded-xl flex items-center gap-1.5 shrink-0 active:scale-95 transition-all shadow-xs"
+              title="الرجوع لنافذة العملاء والشركاء"
+            >
+              <ArrowRight className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span className="whitespace-nowrap">العملاء والشركاء</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Invoices List */}

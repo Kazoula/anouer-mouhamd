@@ -21,6 +21,7 @@ import {
 import { 
   getStoredProducts, 
   saveStoredProducts, 
+  deduplicateProductList,
   getStoredSuppliers, 
   saveStoredSuppliers, 
   getStoredCustomers, 
@@ -175,9 +176,10 @@ export default function App() {
         // Real-time Firestore Subscriptions
         unsubProducts = subscribeToProducts((cloudProds) => {
           if (cloudProds && cloudProds.length > 0) {
-            setProducts(cloudProds);
-            saveStoredProducts(cloudProds);
-            const localCount = getStoredProducts().length;
+            const consolidated = deduplicateProductList(cloudProds);
+            setProducts(consolidated);
+            saveStoredProducts(consolidated);
+            const localCount = consolidated.length;
             if (localCount > cloudProds.length) {
               setCloudUnsyncedLocalCount(localCount - cloudProds.length);
             } else {
@@ -392,7 +394,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [isMobileFrame, setIsMobileFrame] = useState<boolean>(false);
   const [isAlertsOpen, setIsAlertsOpen] = useState<boolean>(false);
+  const [alertsInitialTab, setAlertsInitialTab] = useState<'all' | 'pricing' | 'stock' | 'expiry'>('all');
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+
+  const handleOpenAlerts = (tab: 'all' | 'pricing' | 'stock' | 'expiry' = 'all') => {
+    setAlertsInitialTab(tab);
+    setIsAlertsOpen(true);
+  };
 
   // Invoices Modals
   const [selectedSaleForModal, setSelectedSaleForModal] = useState<SaleInvoice | null>(null);
@@ -539,18 +547,31 @@ export default function App() {
               updatedAt: timestamp,
             };
           } else {
-            // Calculate updated prices
-            let updatedSalePriceMinor = imp.salePriceMinor > 0 ? imp.salePriceMinor : existing.salePriceMinor;
-            let updatedPurchasePriceMinor = imp.purchasePriceMinor > 0 ? imp.purchasePriceMinor : existing.purchasePriceMinor;
-            
-            let updatedSalePriceMajor = imp.salePriceMajor > 0 ? imp.salePriceMajor : existing.salePriceMajor;
-            let updatedPurchasePriceMajor = imp.purchasePriceMajor > 0 ? imp.purchasePriceMajor : existing.purchasePriceMajor;
+            // Calculate updated prices: use sheet prices with exact precision
+            const effectiveRatio = imp.piecesPerMajorUnit || existing.piecesPerMajorUnit || 1;
+            const impSale = (imp.salePriceMinor !== undefined && imp.salePriceMinor > 0)
+              ? imp.salePriceMinor
+              : ((imp.salePriceMajor !== undefined && imp.salePriceMajor > 0) ? +(imp.salePriceMajor / effectiveRatio).toFixed(2) : 0);
+            const impPurchase = (imp.purchasePriceMinor !== undefined && imp.purchasePriceMinor > 0)
+              ? imp.purchasePriceMinor
+              : ((imp.purchasePriceMajor !== undefined && imp.purchasePriceMajor > 0) ? +(imp.purchasePriceMajor / effectiveRatio).toFixed(2) : 0);
 
-            if (imp.salePriceMinor > 0 && (!imp.salePriceMajor || imp.salePriceMajor === imp.salePriceMinor) && (existing.piecesPerMajorUnit || 1) > 1) {
-              updatedSalePriceMajor = updatedSalePriceMinor * (existing.piecesPerMajorUnit || 1);
-            }
-            if (imp.purchasePriceMinor > 0 && (!imp.purchasePriceMajor || imp.purchasePriceMajor === imp.purchasePriceMinor) && (existing.piecesPerMajorUnit || 1) > 1) {
-              updatedPurchasePriceMajor = updatedPurchasePriceMinor * (existing.piecesPerMajorUnit || 1);
+            const updatedSalePriceMinor = impSale > 0 ? impSale : existing.salePriceMinor;
+            const updatedPurchasePriceMinor = impPurchase > 0 ? impPurchase : existing.purchasePriceMinor;
+            
+            let updatedSalePriceMajor = (imp.salePriceMajor !== undefined && imp.salePriceMajor > 0) ? imp.salePriceMajor : existing.salePriceMajor;
+            let updatedPurchasePriceMajor = (imp.purchasePriceMajor !== undefined && imp.purchasePriceMajor > 0) ? imp.purchasePriceMajor : existing.purchasePriceMajor;
+
+            if (effectiveRatio > 1) {
+              if (!updatedSalePriceMajor || (imp.salePriceMajor === imp.salePriceMinor && imp.salePriceMinor > 0)) {
+                updatedSalePriceMajor = +(updatedSalePriceMinor * effectiveRatio).toFixed(2);
+              }
+              if (!updatedPurchasePriceMajor || (imp.purchasePriceMajor === imp.purchasePriceMinor && imp.purchasePriceMinor > 0)) {
+                updatedPurchasePriceMajor = +(updatedPurchasePriceMinor * effectiveRatio).toFixed(2);
+              }
+            } else {
+              updatedSalePriceMajor = updatedSalePriceMinor;
+              updatedPurchasePriceMajor = updatedPurchasePriceMinor;
             }
 
             updatedList[matchIdx] = {
@@ -596,8 +617,8 @@ export default function App() {
         }
       });
 
-      finalUpdated = updatedList;
-      return updatedList;
+      finalUpdated = deduplicateProductList(updatedList);
+      return finalUpdated;
     });
 
     if (newMovements.length > 0) {
@@ -1506,7 +1527,7 @@ export default function App() {
         {/* Top Header */}
         <Header
           products={products}
-          onOpenAlerts={() => setIsAlertsOpen(true)}
+          onOpenAlerts={() => handleOpenAlerts('all')}
           onOpenSettings={() => setIsSettingsOpen(true)}
           isMobileFrame={isMobileFrame}
           setIsMobileFrame={setIsMobileFrame}
@@ -1545,7 +1566,7 @@ export default function App() {
               purchases={purchases}
               currency={currency}
               setActiveTab={setActiveTab}
-              onOpenAlerts={() => setIsAlertsOpen(true)}
+              onOpenAlerts={handleOpenAlerts}
               onQuickNewSale={handleQuickNewSale}
               onQuickNewPurchase={handleQuickNewPurchase}
               onQuickNewProduct={handleQuickNewProduct}
@@ -1710,6 +1731,9 @@ export default function App() {
         products={products}
         currency={currency}
         onReorderProduct={handleReorderFromAlerts}
+        onUpdateProduct={handleSaveProduct}
+        onDeleteProduct={handleDeleteProduct}
+        initialTab={alertsInitialTab}
       />
 
       {/* Sale / Purchase Invoice Printable Modal */}

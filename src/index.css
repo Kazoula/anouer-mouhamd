@@ -417,13 +417,13 @@ html.light .text-black {
   color: #020617 !important;
 }
 
-html.light .text-white,
-html.light [class*="text-white"]:not(.keep-white) {
-  color: #0f172a !important;
+html.light .text-white:not([class*="bg-"]):not(.keep-white):not([class*="keep-white"]),
+html.light [class*="text-white"]:not([class*="bg-"]):not(.keep-white):not([class*="keep-white"]) {
+  color: #0f172a;
 }
 
-html.light .text-slate-100,
-html.light [class*="text-slate-100"] {
+html.light .text-slate-100:not([class*="bg-"]):not(.keep-white):not([class*="keep-white"]),
+html.light [class*="text-slate-100"]:not([class*="bg-"]):not(.keep-white):not([class*="keep-white"]) {
   color: #0f172a !important;
 }
 
@@ -447,38 +447,147 @@ html.light [class*="text-slate-500"] {
   color: #94a3b8 !important;
 }
 
+/* =========================================================
+   ALL BLUE BUTTONS & ICONS (الايقونات والازرار الزرقاء):
+   GUARANTEED PURE WHITE TEXT & ICONS IN DAY MODE (LIGHT MODE)
+   ========================================================= */
+.bg-blue-600,
+.bg-blue-600 *,
+.bg-blue-500,
+.bg-blue-500 *,
+.bg-blue-700,
+.bg-blue-700 *,
+[class*="bg-blue-600"],
+[class*="bg-blue-600"] *,
+[class*="bg-blue-500"],
+[class*="bg-blue-500"] *,
+[class*="bg-blue-700"],
+[class*="bg-blue-700"] *,
+button[class*="bg-blue"],
+button[class*="bg-blue"] *,
+#quick-purchase-btn,
+#quick-purchase-btn *,
+#new-purchase-invoice-btn,
+#new-purchase-invoice-btn *,
+#add-partner-top-btn,
+#add-partner-top-btn *,
+#nav-tab-purchases [class*="bg-blue-600"],
+#nav-tab-purchases [class*="bg-blue-600"] *,
+html.light .bg-blue-600,
+html.light .bg-blue-600 *,
+html.light .bg-blue-500,
+html.light .bg-blue-500 *,
+html.light .bg-blue-700,
+html.light .bg-blue-700 *,
+html.light [class*="bg-blue-600"],
+html.light [class*="bg-blue-600"] *,
+html.light [class*="bg-blue-500"],
+html.light [class*="bg-blue-500"] *,
+html.light [class*="bg-blue-700"],
+html.light [class*="bg-blue-700"] *,
+html.light button[class*="bg-blue"],
+html.light button[class*="bg-blue"] *,
+html.light button[class*="bg-blue-600"],
+html.light button[class*="bg-blue-600"] *,
+html.light button[class*="bg-blue-500"],
+html.light button[class*="bg-blue-500"] *,
+html.light button[class*="bg-blue"] span,
+html.light button[class*="bg-blue-600"] span,
+html.light button[class*="bg-blue-500"] span,
+html.light button[class*="bg-blue"] svg,
+html.light button[class*="bg-blue-600"] svg,
+html.light button[class*="bg-blue-500"] svg,
+html.light button[class*="bg-blue"] path,
+html.light button[class*="bg-blue-600"] path,
+html.light button[class*="bg-blue-500"] path,
+html.light [class*="bg-blue"] span,
+html.light [class*="bg-blue"] svg,
+html.light [class*="bg-blue"] path,
+html.light div[class*="bg-blue"] *,
+html.light span[class*="bg-blue"] *,
+html.light #quick-purchase-btn,
+html.light #quick-purchase-btn *,
+html.light #new-purchase-invoice-btn,
+html.light #new-purchase-invoice-btn *,
+html.light #add-partner-top-btn,
+html.light #add-partner-top-btn * {
+  color: #ffffff !important;
+  fill: currentColor !important;
+  stroke: currentColor;
+}
+
+/* Import from Sheet Button: Grey icon + Golden Yellow text across all modes */
+#import-products-sheet-btn svg,
+#import-products-sheet-btn svg *,
+#import-partners-sheet-btn svg,
+#import-partners-sheet-btn svg *,
+#quick-import-sheet-btn svg,
+#quick-import-sheet-btn svg *,
+html.light #import-products-sheet-btn svg,
+html.light #import-products-sheet-btn svg *,
+html.light #import-partners-sheet-btn svg,
+html.light #import-partners-sheet-btn svg *,
+html.light #quick-import-sheet-btn svg,
+html.light #quick-import-sheet-btn svg *,
+html.dark #import-products-sheet-btn svg,
+html.dark #import-products-sheet-btn svg *,
+html.dark #import-partners-sheet-btn svg,
+html.dark #import-partners-sheet-btn svg *,
+html.dark #quick-import-sheet-btn svg,
+html.dark #quick-import-sheet-btn svg * {
+  color: #94a3b8 !important;
+  stroke: #94a3b8 !important;
+}
+
+#import-products-sheet-btn span,
+#import-partners-sheet-btn span,
+#quick-import-sheet-btn span:first-of-type,
+html.light #import-products-sheet-btn span,
+html.light #import-partners-sheet-btn span,
+html.light #quick-import-sheet-btn span:first-of-type,
+html.dark #import-products-sheet-btn span,
+html.dark #import-partners-sheet-btn span,
+html.dark #quick-import-sheet-btn span:first-of-type {
+  color: #fbbf24 !important;
+}
+
 /* Solid Colored Action Buttons & Badges in Light Mode (Retain Pure White Text on dark saturated buttons) */
 html.light .keep-white,
 html.light .keep-white *,
 html.light [class*="keep-white"],
 html.light [class*="keep-white"] *,
+html.light [class*="!text-white"],
+html.light [class*="!text-white"] *,
 html.light button.bg-red-600,
+html.light button.bg-red-600 *,
 html.light button.bg-red-500,
+html.light button.bg-red-500 *,
 html.light button.bg-emerald-600,
+html.light button.bg-emerald-600 *,
 html.light button.bg-emerald-500,
-html.light button.bg-blue-600,
-html.light button.bg-blue-500,
+html.light button.bg-emerald-500 *,
 html.light button.bg-purple-600,
+html.light button.bg-purple-600 *,
 html.light button.bg-purple-700,
+html.light button.bg-purple-700 *,
 html.light button.bg-indigo-600,
+html.light button.bg-indigo-600 *,
 html.light button.bg-rose-600,
+html.light button.bg-rose-600 *,
 html.light button.bg-rose-500,
+html.light button.bg-rose-500 *,
 html.light button.bg-amber-600,
+html.light button.bg-amber-600 *,
 html.light button.bg-teal-600,
-html.light .bg-red-600.text-white,
-html.light .bg-red-500.text-white,
-html.light .bg-emerald-600.text-white,
-html.light .bg-emerald-500.text-white,
-html.light .bg-blue-600.text-white,
-html.light .bg-blue-500.text-white,
-html.light .bg-rose-600.text-white,
-html.light .bg-rose-500.text-white,
-html.light .bg-amber-600.text-white,
-html.light .bg-purple-600.text-white,
-html.light .bg-purple-700.text-white,
-html.light .bg-indigo-600.text-white,
-html.light .bg-violet-600.text-white,
-html.light .bg-teal-600.text-white {
+html.light button.bg-teal-600 *,
+html.light [class*="bg-emerald-600"],
+html.light [class*="bg-emerald-600"] *,
+html.light [class*="bg-purple-600"],
+html.light [class*="bg-purple-600"] *,
+html.light [class*="bg-rose-600"],
+html.light [class*="bg-rose-600"] *,
+html.light [class*="bg-red-600"],
+html.light [class*="bg-red-600"] * {
   color: #ffffff !important;
 }
 

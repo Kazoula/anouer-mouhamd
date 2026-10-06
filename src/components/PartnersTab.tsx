@@ -444,30 +444,37 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
           onClick={() => setPartnerType('suppliers')}
           className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
             partnerType === 'suppliers'
-              ? 'bg-blue-600 text-white shadow-md'
+              ? 'bg-blue-600 text-white shadow-md keep-white !text-white'
               : 'text-slate-400 hover:text-white'
           }`}
+          style={partnerType === 'suppliers' ? { color: '#ffffff' } : undefined}
         >
-          <Truck className="w-4 h-4" />
-          <span>سجل الموردين ({suppliers.length})</span>
+          <Truck className={`w-4 h-4 ${partnerType === 'suppliers' ? 'text-white !text-white' : ''}`} style={partnerType === 'suppliers' ? { color: '#ffffff' } : undefined} />
+          <span className={partnerType === 'suppliers' ? 'text-white !text-white keep-white font-bold' : ''} style={partnerType === 'suppliers' ? { color: '#ffffff' } : undefined}>
+            سجل الموردين ({suppliers.length})
+          </span>
         </button>
 
         <button
           onClick={() => setPartnerType('customers')}
           className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
             partnerType === 'customers'
-              ? 'bg-emerald-600 text-white shadow-md'
+              ? 'bg-emerald-600 text-white shadow-md keep-white !text-white'
               : 'text-slate-400 hover:text-white'
           }`}
+          style={partnerType === 'customers' ? { color: '#ffffff' } : undefined}
         >
-          <UserCheck className="w-4 h-4" />
-          <span>سجل العملاء ({customers.length})</span>
+          <UserCheck className={`w-4 h-4 ${partnerType === 'customers' ? 'text-white !text-white' : ''}`} style={partnerType === 'customers' ? { color: '#ffffff' } : undefined} />
+          <span className={partnerType === 'customers' ? 'text-white !text-white keep-white font-bold' : ''} style={partnerType === 'customers' ? { color: '#ffffff' } : undefined}>
+            سجل العملاء ({customers.length})
+          </span>
         </button>
       </div>
 
       {/* Search & Add Action Bar */}
-      <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="space-y-2">
+        {/* Full-width Search on Mobile */}
+        <div className="relative w-full">
           <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
           <input
             type="text"
@@ -478,7 +485,7 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
             }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-9 pl-8 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
           />
           {searchQuery && (
             <button
@@ -490,7 +497,108 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* Action Buttons Row: Horizontally wrapped & touch-friendly on mobile, fully visible */}
+        <div className="flex flex-wrap items-center gap-2 pb-1.5 pt-0.5 w-full">
+          {/* 1. New Partner Button - PRIMARY & FIRST! */}
+          <button
+            id="add-partner-top-btn"
+            onClick={partnerType === 'suppliers' ? openAddSupplier : openAddCustomer}
+            style={{ color: '#ffffff' }}
+            className={`font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl flex items-center gap-1.5 text-white shadow-lg shrink-0 active:scale-95 transition-all keep-white !text-white ${
+              partnerType === 'suppliers' ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/30' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30'
+            }`}
+          >
+            <Plus className="w-4 h-4 shrink-0 text-white !text-white" style={{ color: '#ffffff' }} />
+            <span className="whitespace-nowrap text-white !text-white font-bold" style={{ color: '#ffffff' }}>
+              {partnerType === 'suppliers' ? 'مورد جديد' : 'عميل جديد'}
+            </span>
+          </button>
+
+          {/* 2. Import from Sheet Button - SECOND! (Grey icon + Golden Yellow text) */}
+          <button
+            id="import-partners-sheet-btn"
+            onClick={() => setIsImportModalOpen(true)}
+            className="font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl flex items-center gap-1.5 border border-slate-700/80 hover:border-amber-400/50 bg-slate-800 hover:bg-slate-750 shadow-md active:scale-95 transition-all shrink-0 cursor-pointer"
+            title={`استيراد جماعي لـ ${partnerType === 'suppliers' ? 'الموردين' : 'العملاء'} من ملف Excel أو Google Sheets`}
+          >
+            <FileSpreadsheet className="w-4 h-4 shrink-0 text-slate-400" style={{ color: '#94a3b8', stroke: '#94a3b8' }} />
+            <span className="whitespace-nowrap font-black text-amber-400" style={{ color: '#fbbf24' }}>استيراد من الشيت</span>
+          </button>
+
+          {/* 3. Payment / Receipt Button */}
+          {partnerType === 'customers' ? (
+            <button
+              id="pay-customer-top-btn"
+              onClick={() => {
+                setPaymentTarget(null);
+                setIsSupplierPaymentModalOpen(true);
+              }}
+              className="bg-yellow-400 hover:bg-yellow-300 text-slate-950 border border-yellow-500 font-black text-xs sm:text-sm px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all shrink-0"
+              title="تسجيل سند قبض جديد (تحصيل نقدية من عميل)"
+            >
+              <Wallet className="w-4 h-4 text-slate-950 stroke-[2.5] shrink-0" />
+              <span className="text-slate-950 font-black whitespace-nowrap">سند قبض</span>
+            </button>
+          ) : (
+            <button
+              id="pay-supplier-top-btn"
+              onClick={() => {
+                setPaymentTarget(null);
+                setIsSupplierPaymentModalOpen(true);
+              }}
+              className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400 font-bold text-xs sm:text-sm px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all shrink-0"
+              title="تسجيل سند صرف جديد (دفع دفعة لمورد)"
+            >
+              <Wallet className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="whitespace-nowrap">سند صرف لمورد</span>
+            </button>
+          )}
+
+          {/* 4. Financial Settlement Button */}
+          <button
+            id={partnerType === 'suppliers' ? 'supplier-settlement-top-btn' : 'customer-settlement-top-btn'}
+            onClick={() => {
+              setSettlementTarget(null);
+              setIsSettlementModalOpen(true);
+            }}
+            className="bg-black hover:bg-slate-900 text-white border border-slate-750 hover:border-slate-600 font-bold text-xs sm:text-sm px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all shrink-0"
+            title="تسوية مالية (تصفير رصيد / خصم تسوية / مطابقة كشف)"
+          >
+            <Scale className="w-4 h-4 text-white shrink-0" />
+            <span className="text-white font-bold whitespace-nowrap">تسوية مالية</span>
+          </button>
+
+          {/* 5. Settlements Ledger Button */}
+          <button
+            id={partnerType === 'suppliers' ? 'settlements-ledger-top-btn' : 'customer-settlements-ledger-top-btn'}
+            onClick={() => setIsSettlementsLedgerModalOpen(true)}
+            className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 font-bold text-xs sm:text-sm px-2.5 sm:px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all shrink-0"
+            title="سجل التسويات المالية المعتمدة للعملاء والموردين"
+          >
+            <Scale className="w-4 h-4 text-slate-300 shrink-0" />
+            <span className="whitespace-nowrap">سجل التسويات</span>
+            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-black border border-slate-700 text-white font-bold">
+              {settlements.filter((s) => s.partnerType === (partnerType === 'suppliers' ? 'supplier' : 'customer')).length}
+            </span>
+          </button>
+
+          {/* 6. Supplier Payments Ledger (if suppliers) */}
+          {partnerType === 'suppliers' && (
+            <button
+              id="supplier-payments-ledger-btn"
+              onClick={() => setIsPaymentsHistoryOpen(true)}
+              className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 font-bold text-xs sm:text-sm px-2.5 sm:px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all shrink-0"
+              title="سجل سندات الصرف والمدفوعات لجميع الموردين"
+            >
+              <Receipt className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="whitespace-nowrap">سجل سندات الصرف</span>
+              <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-amber-300 font-bold">
+                {payments.filter((p) => p.partnerType === 'supplier').length}
+              </span>
+            </button>
+          )}
+
+          {/* 7. Delete All Button - At the end so it's not accidentally touched */}
           {((partnerType === 'suppliers' && suppliers.length > 0) || (partnerType === 'customers' && customers.length > 0)) && (
             <button
               id="delete-all-partners-btn"
@@ -498,139 +606,13 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
                 setDeleteAllTarget(partnerType);
                 setIsDeleteAllModalOpen(true);
               }}
-              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 hover:border-rose-500 font-bold text-xs sm:text-sm px-2.5 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 hover:border-rose-500 font-bold text-xs sm:text-sm px-2.5 sm:px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all shrink-0"
               title={partnerType === 'suppliers' ? "حذف جميع الموردين بضغطة واحدة" : "حذف جميع العملاء بضغطة واحدة"}
             >
-              <Trash2 className="w-4 h-4 text-rose-500 dark:text-rose-400" />
-              <span className="hidden sm:inline font-bold">
-                {partnerType === 'suppliers' ? 'حذف كافة الموردين' : 'حذف كافة العملاء'}
-              </span>
-              <span className="sm:hidden font-bold">حذف الكل</span>
+              <Trash2 className="w-4 h-4 text-rose-500 dark:text-rose-400 shrink-0" />
+              <span className="whitespace-nowrap">حذف الكل</span>
             </button>
           )}
-
-          {partnerType === 'suppliers' && (
-            <>
-              <button
-                id="supplier-payments-ledger-btn"
-                onClick={() => setIsPaymentsHistoryOpen(true)}
-                className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 font-bold text-xs sm:text-sm px-2.5 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                title="سجل سندات الصرف والمدفوعات لجميع الموردين"
-              >
-                <Receipt className="w-4 h-4 text-amber-400" />
-                <span className="hidden lg:inline">سجل سندات الصرف</span>
-                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-amber-300 font-bold">
-                  {payments.filter((p) => p.partnerType === 'supplier').length}
-                </span>
-              </button>
-
-              <button
-                id="pay-supplier-top-btn"
-                onClick={() => {
-                  setPaymentTarget(null);
-                  setIsSupplierPaymentModalOpen(true);
-                }}
-                className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400 font-bold text-xs sm:text-sm px-3 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
-                title="تسجيل سند صرف جديد (دفع دفعة لمورد)"
-              >
-                <Wallet className="w-4 h-4 text-amber-400" />
-                <span>سند صرف لمورد</span>
-              </button>
-
-              <button
-                id="supplier-settlement-top-btn"
-                onClick={() => {
-                  setSettlementTarget(null);
-                  setIsSettlementModalOpen(true);
-                }}
-                className="bg-black hover:bg-slate-900 text-white border border-slate-750 hover:border-slate-600 font-bold text-xs sm:text-sm px-3 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
-                title="تسوية مالية لمورد (تصفير رصيد / خصم تسوية / مطابقة كشف)"
-              >
-                <Scale className="w-4 h-4 text-white" />
-                <span className="text-white font-bold">تسوية مالية</span>
-              </button>
-
-              <button
-                id="settlements-ledger-top-btn"
-                onClick={() => setIsSettlementsLedgerModalOpen(true)}
-                className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 font-bold text-xs sm:text-sm px-2.5 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                title="سجل التسويات المالية المعتمدة للعملاء والموردين"
-              >
-                <Scale className="w-4 h-4 text-slate-300" />
-                <span className="hidden lg:inline">سجل التسويات</span>
-                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-black border border-slate-700 text-white font-bold">
-                  {settlements.filter((s) => s.partnerType === 'supplier').length}
-                </span>
-              </button>
-            </>
-          )}
-
-          {partnerType === 'customers' && (
-            <>
-              <button
-                id="pay-customer-top-btn"
-                onClick={() => {
-                  setPaymentTarget(null);
-                  setIsSupplierPaymentModalOpen(true);
-                }}
-                className="bg-yellow-400 hover:bg-yellow-300 text-slate-950 border border-yellow-500 font-black text-xs sm:text-sm px-3 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
-                title="تسجيل سند قبض جديد (تحصيل نقدية من عميل)"
-              >
-                <Wallet className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-                <span className="text-slate-950 font-black">سند قبض من عميل</span>
-              </button>
-
-              <button
-                id="customer-settlement-top-btn"
-                onClick={() => {
-                  setSettlementTarget(null);
-                  setIsSettlementModalOpen(true);
-                }}
-                className="bg-black hover:bg-slate-900 text-white border border-slate-750 hover:border-slate-600 font-bold text-xs sm:text-sm px-3 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
-                title="تسوية مالية لعميل (تصفير رصيد / خصم تسوية / مطابقة كشف)"
-              >
-                <Scale className="w-4 h-4 text-white" />
-                <span className="text-white font-bold">تسوية مالية</span>
-              </button>
-
-              <button
-                id="customer-settlements-ledger-top-btn"
-                onClick={() => setIsSettlementsLedgerModalOpen(true)}
-                className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 font-bold text-xs sm:text-sm px-2.5 sm:px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                title="سجل التسويات المالية المعتمدة للعملاء والموردين"
-              >
-                <Scale className="w-4 h-4 text-slate-300" />
-                <span className="hidden lg:inline">سجل التسويات</span>
-                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-black border border-slate-700 text-white font-bold">
-                  {settlements.filter((s) => s.partnerType === 'customer').length}
-                </span>
-              </button>
-            </>
-          )}
-
-          <button
-            id="import-partners-sheet-btn"
-            onClick={() => setIsImportModalOpen(true)}
-            className={`font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 border shadow-md active:scale-95 transition-all ${
-              partnerType === 'suppliers'
-                ? 'bg-slate-800 hover:bg-slate-750 text-blue-400 border-blue-500/40 hover:border-blue-400'
-                : 'bg-slate-800 hover:bg-slate-750 text-emerald-400 border-emerald-500/40 hover:border-emerald-400'
-            }`}
-            title={`استيراد جماعي لـ ${partnerType === 'suppliers' ? 'الموردين' : 'العملاء'} من ملف Excel أو Google Sheets`}
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>استيراد من الشيت</span>
-          </button>
-
-          <button
-            onClick={partnerType === 'suppliers' ? openAddSupplier : openAddCustomer}
-            className={`font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 text-white shadow-lg shrink-0 active:scale-95 transition-all ${
-              partnerType === 'suppliers' ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/30' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30'
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            <span>{partnerType === 'suppliers' ? 'مورد جديد' : 'عميل جديد'}</span>
-          </button>
         </div>
       </div>
 
@@ -706,28 +688,34 @@ export const PartnersTab: React.FC<PartnersTabProps> = ({
               <button
                 type="button"
                 onClick={() => setSupplierViewMode('table')}
+                style={supplierViewMode === 'table' ? { color: '#ffffff' } : undefined}
                 className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
                   supplierViewMode === 'table'
-                    ? 'bg-blue-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-blue-600 text-white font-bold shadow-sm keep-white !text-white'
+                    : 'text-slate-400 hover:text-white'
                 }`}
                 title="عرض جدول الأعمدة التسعة للموردين"
               >
-                <LayoutList className="w-3.5 h-3.5" />
-                <span>جدول الأعمدة</span>
+                <LayoutList className={`w-3.5 h-3.5 ${supplierViewMode === 'table' ? 'text-white !text-white' : ''}`} style={supplierViewMode === 'table' ? { color: '#ffffff' } : undefined} />
+                <span className={supplierViewMode === 'table' ? 'text-white !text-white keep-white font-bold' : ''} style={supplierViewMode === 'table' ? { color: '#ffffff' } : undefined}>
+                  جدول الأعمدة
+                </span>
               </button>
               <button
                 type="button"
                 onClick={() => setSupplierViewMode('cards')}
+                style={supplierViewMode === 'cards' ? { color: '#ffffff' } : undefined}
                 className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
                   supplierViewMode === 'cards'
-                    ? 'bg-blue-600 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-blue-600 text-white font-bold shadow-sm keep-white !text-white'
+                    : 'text-slate-400 hover:text-white'
                 }`}
                 title="عرض بطاقات الموردين"
               >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span>بطاقات</span>
+                <LayoutGrid className={`w-3.5 h-3.5 ${supplierViewMode === 'cards' ? 'text-white !text-white' : ''}`} style={supplierViewMode === 'cards' ? { color: '#ffffff' } : undefined} />
+                <span className={supplierViewMode === 'cards' ? 'text-white !text-white keep-white font-bold' : ''} style={supplierViewMode === 'cards' ? { color: '#ffffff' } : undefined}>
+                  بطاقات
+                </span>
               </button>
             </div>
           )}

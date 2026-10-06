@@ -28,10 +28,14 @@ import {
   CheckCircle2,
   Calculator,
   Palette,
-  Maximize2
+  Maximize2,
+  TrendingDown,
+  Calendar,
+  CalendarX,
+  Clock
 } from 'lucide-react';
 import { Product, Supplier, StockMovement } from '../types';
-import { formatCurrency, formatStockUnits, formatArabicDateTime } from '../utils/calculations';
+import { formatCurrency, formatStockUnits, formatArabicDateTime, isProductPriceLoss, getProductPriceLossInfo } from '../utils/calculations';
 import { 
   isDualUnitProduct, 
   getPrimaryUnit, 
@@ -84,6 +88,27 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [filterLowStockOnly, setFilterLowStockOnly] = useState<boolean>(initialFilterLowStock);
+  const [filterPriceLossOnly, setFilterPriceLossOnly] = useState<boolean>(false);
+  const [filterExpiryOnly, setFilterExpiryOnly] = useState<boolean>(false);
+
+  // Alert counters
+  const priceLossCount = useMemo(() => {
+    return products.filter(p => isProductPriceLoss(p)).length;
+  }, [products]);
+
+  const lowStockCount = useMemo(() => {
+    return products.filter(p => p.stockPieces <= p.minStockAlert).length;
+  }, [products]);
+
+  const expiryCount = useMemo(() => {
+    const now = Date.now();
+    return products.filter(p => {
+      if (!p.expiryDate || !p.expiryDate.trim()) return false;
+      const expDate = new Date(p.expiryDate).getTime();
+      const diffDays = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
+      return diffDays <= 60;
+    }).length;
+  }, [products]);
   
   // Modals
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -429,13 +454,28 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
       list = list.filter(p => p.category === selectedCategory);
     }
 
-    // 3. Filter by low stock
+    // 3. Filter by price loss (Purchase > Sale)
+    if (filterPriceLossOnly) {
+      list = list.filter(p => isProductPriceLoss(p));
+    }
+
+    // 4. Filter by low stock
     if (filterLowStockOnly) {
       list = list.filter(p => p.stockPieces <= p.minStockAlert);
     }
 
+    // 5. Filter by expiry (Expired or within 60 days)
+    if (filterExpiryOnly) {
+      const now = Date.now();
+      list = list.filter(p => {
+        if (!p.expiryDate || !p.expiryDate.trim()) return false;
+        const diffDays = Math.ceil((new Date(p.expiryDate).getTime() - now) / (1000 * 60 * 60 * 24));
+        return diffDays <= 60;
+      });
+    }
+
     return list;
-  }, [products, searchQuery, selectedCategory, filterLowStockOnly]);
+  }, [products, searchQuery, selectedCategory, filterLowStockOnly, filterPriceLossOnly, filterExpiryOnly]);
 
   // Total pages
   const totalPages = useMemo(() => {
@@ -446,7 +486,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
   // Reset to page 1 on filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory, filterLowStockOnly, pageSize]);
+  }, [searchQuery, selectedCategory, filterLowStockOnly, filterPriceLossOnly, filterExpiryOnly, pageSize]);
 
   // Paginated Products Slice
   const paginatedProducts = useMemo(() => {
@@ -565,6 +605,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
       salePriceMajor: sMajor,
       stockPieces: Number(formData.stockPieces) || 0,
       minStockAlert: Math.max(0, Number(formData.minStockAlert) || 0),
+      expiryDate: formData.expiryDate?.trim() || undefined,
       defaultSupplierId: formData.defaultSupplierId,
       defaultSupplierName: supplierObj ? supplierObj.name : '',
       notes: formData.notes || '',
@@ -636,42 +677,45 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0 justify-end">
-          {products.length > 0 && onDeleteAllProducts && (
+          <div className="flex flex-wrap items-center gap-2 py-0.5 w-full sm:w-auto justify-start sm:justify-end">
+            {/* 1. New Product Button - PRIMARY & FIRST! */}
             <button
-              id="delete-all-products-btn"
-              onClick={() => {
-                setClearMovementsWithAll(false);
-                setIsDeleteAllModalOpen(true);
-              }}
-              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 hover:border-rose-500 font-bold text-xs sm:text-sm px-2.5 sm:px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
-              title="حذف جميع الأصناف بضغطة واحدة"
+              id="add-new-product-btn"
+              onClick={openAddModal}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 active:scale-95 transition-all shrink-0 keep-white"
             >
-              <Trash2 className="w-4 h-4 text-rose-500 dark:text-rose-400" />
-              <span className="hidden sm:inline font-bold">حذف الكل</span>
+              <Plus className="w-4 h-4 shrink-0 text-white" />
+              <span className="whitespace-nowrap text-white font-bold">صنف جديد</span>
             </button>
-          )}
 
-          <button
-            id="import-products-sheet-btn"
-            onClick={() => setIsImportModalOpen(true)}
-            className="bg-slate-800 hover:bg-slate-750 text-emerald-400 border border-emerald-500/40 hover:border-emerald-400 font-bold text-xs sm:text-sm px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
-            title="استيراد أصناف جماعية من ملف Excel أو Google Sheets"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>استيراد<span className="hidden min-[420px]:inline"> من الشيت</span></span>
-          </button>
+            {/* 2. Import from Sheet Button - SECOND! (Grey icon + Golden Yellow text) */}
+            <button
+              id="import-products-sheet-btn"
+              onClick={() => setIsImportModalOpen(true)}
+              className="bg-slate-800 hover:bg-slate-750 border border-slate-700/80 hover:border-amber-400/50 font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all shrink-0 cursor-pointer"
+              title="استيراد أصناف جماعية من ملف Excel أو Google Sheets"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-slate-400 shrink-0" style={{ color: '#94a3b8', stroke: '#94a3b8' }} />
+              <span className="whitespace-nowrap font-black text-amber-400" style={{ color: '#fbbf24' }}>استيراد من الشيت</span>
+            </button>
 
-          <button
-            id="add-new-product-btn"
-            onClick={openAddModal}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 active:scale-95 transition-all shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>صنف جديد</span>
-          </button>
+            {/* 3. Delete All Button - At the end */}
+            {products.length > 0 && onDeleteAllProducts && (
+              <button
+                id="delete-all-products-btn"
+                onClick={() => {
+                  setClearMovementsWithAll(false);
+                  setIsDeleteAllModalOpen(true);
+                }}
+                className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 hover:border-rose-500 font-bold text-xs sm:text-sm px-2.5 sm:px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all shrink-0"
+                title="حذف جميع الأصناف بضغطة واحدة"
+              >
+                <Trash2 className="w-4 h-4 text-rose-500 dark:text-rose-400 shrink-0" />
+                <span className="whitespace-nowrap">حذف الكل</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
 
         {/* Multi-Token Search Indicator Chips */}
         {searchTokens.length > 1 && (
@@ -697,19 +741,76 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
         </div>
       )}
 
-      {/* Filter Chips & Low Stock Toggle */}
+      {/* Filter Chips & Urgent Alerts Toggles */}
       <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* 1. Price Loss Alert Filter */}
+          <button
+            onClick={() => setFilterPriceLossOnly(!filterPriceLossOnly)}
+            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all whitespace-nowrap cursor-pointer ${
+              filterPriceLossOnly
+                ? 'bg-rose-600 border-rose-500 text-white shadow-md'
+                : priceLossCount > 0
+                  ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+            }`}
+            title="فلترة الأصناف التي سعر شرائها أعلى من سعر بيعها"
+          >
+            <TrendingDown className="w-3.5 h-3.5 text-rose-400" />
+            <span>خسارة أسعار</span>
+            {priceLossCount > 0 && (
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                filterPriceLossOnly ? 'bg-white text-rose-600' : 'bg-rose-500/30 text-rose-300'
+              }`}>
+                {priceLossCount}
+              </span>
+            )}
+          </button>
+
+          {/* 2. Low Stock Alert Filter */}
           <button
             onClick={() => setFilterLowStockOnly(!filterLowStockOnly)}
-            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all ${
+            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all whitespace-nowrap cursor-pointer ${
               filterLowStockOnly
-                ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-md'
-                : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-md font-black'
+                : lowStockCount > 0
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
             }`}
+            title="فلترة الأصناف الأقل من حد الطلب أو قاربت على النفاد"
           >
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span>نقص المخزون فقط</span>
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            <span>نقص المخزون</span>
+            {lowStockCount > 0 && (
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                filterLowStockOnly ? 'bg-slate-950 text-amber-400' : 'bg-amber-500/30 text-amber-300'
+              }`}>
+                {lowStockCount}
+              </span>
+            )}
+          </button>
+
+          {/* 3. Expiry Date Alert Filter */}
+          <button
+            onClick={() => setFilterExpiryOnly(!filterExpiryOnly)}
+            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all whitespace-nowrap cursor-pointer ${
+              filterExpiryOnly
+                ? 'bg-purple-600 border-purple-500 text-white shadow-md'
+                : expiryCount > 0
+                  ? 'bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+            }`}
+            title="فلترة الأصناف المنتهية أو القريبة من انتهاء الصلاحية"
+          >
+            <CalendarX className="w-3.5 h-3.5 text-purple-400" />
+            <span>الصلاحية</span>
+            {expiryCount > 0 && (
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                filterExpiryOnly ? 'bg-white text-purple-600' : 'bg-purple-500/30 text-purple-300'
+              }`}>
+                {expiryCount}
+              </span>
+            )}
           </button>
 
           {products.length > 0 && (
@@ -860,6 +961,17 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
         <div className="space-y-3">
           {paginatedProducts.map((product) => {
             const isLowStock = product.stockPieces <= product.minStockAlert;
+            const isPriceLoss = isProductPriceLoss(product);
+            const lossInfo = getProductPriceLossInfo(product);
+            let isExpired = false;
+            let isNearExpiry = false;
+            let expiryDaysLeft = 0;
+            if (product.expiryDate && product.expiryDate.trim()) {
+              const expTime = new Date(product.expiryDate).getTime();
+              expiryDaysLeft = Math.ceil((expTime - Date.now()) / (1000 * 60 * 60 * 24));
+              if (expiryDaysLeft < 0) isExpired = true;
+              else if (expiryDaysLeft <= 30) isNearExpiry = true;
+            }
             const stockUnits = formatStockUnits(
               product.stockPieces,
               product.piecesPerMajorUnit,
@@ -878,9 +990,11 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
               <div
                 key={product.id}
                 className={`bg-slate-850 border rounded-2xl p-3.5 transition-all shadow-md ${
-                  isLowStock
-                    ? 'border-red-500/50 bg-gradient-to-br from-slate-850 via-slate-850 to-red-950/25 dark:from-black dark:via-zinc-950 dark:to-red-950/30'
-                    : 'border-slate-800 hover:border-slate-700'
+                  isPriceLoss || isExpired
+                    ? 'border-rose-500/70 bg-gradient-to-br from-slate-850 via-slate-850 to-rose-950/30'
+                    : isLowStock
+                      ? 'border-amber-500/60 bg-gradient-to-br from-slate-850 via-slate-850 to-amber-950/25 dark:from-black dark:via-zinc-950 dark:to-amber-950/30'
+                      : 'border-slate-800 hover:border-slate-700'
                 }`}
               >
                 {/* Header Row: Name, Category, Badges */}
@@ -890,10 +1004,46 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                       <h3 className="font-bold text-sm sm:text-base text-white">
                         <HighlightedProductName name={product.name} query={searchQuery} />
                       </h3>
+
+                      {/* 1. Price Loss Badge */}
+                      {isPriceLoss && (
+                        <span 
+                          className="keep-white bg-rose-600 text-white !text-white text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs animate-pulse select-none"
+                          style={{ color: '#ffffff' }}
+                          title={`سعر الشراء (${lossInfo.purchasePrice}) أعلى من سعر البيع (${lossInfo.salePrice})`}
+                        >
+                          <TrendingDown className="w-3 h-3 text-white" />
+                          <span>خسارة {lossInfo.lossAmount} {currency} / {lossInfo.lossUnit}</span>
+                        </span>
+                      )}
+
+                      {/* 2. Low Stock Badge */}
                       {isLowStock && (
-                        <span className="bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/40 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
-                          <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
-                          <span>منخفض ({product.stockPieces} {isDual ? product.minorUnit : primaryUnit})</span>
+                        <span className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+                          <AlertTriangle className="w-3 h-3 text-amber-400 animate-pulse" />
+                          <span>نقص مخزون ({product.stockPieces} {isDual ? product.minorUnit : primaryUnit})</span>
+                        </span>
+                      )}
+
+                      {/* 3. Expiry Badge */}
+                      {isExpired && (
+                        <span 
+                          className="keep-white bg-rose-600 text-white !text-white text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs select-none"
+                          style={{ color: '#ffffff' }}
+                          title={`انتهت الصلاحية في ${product.expiryDate}`}
+                        >
+                          <CalendarX className="w-3 h-3 text-white" />
+                          <span>منتهي الصلاحية</span>
+                        </span>
+                      )}
+                      {!isExpired && isNearExpiry && (
+                        <span 
+                          className="keep-white bg-amber-600 text-white !text-white text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs select-none"
+                          style={{ color: '#ffffff' }}
+                          title={`ينتهي خلال ${expiryDaysLeft} يوم`}
+                        >
+                          <Clock className="w-3 h-3 text-white" />
+                          <span>ينتهي خلال {expiryDaysLeft} يوم</span>
                         </span>
                       )}
                     </div>
@@ -1564,8 +1714,8 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                 )}
               </div>
 
-              {/* Stock and Low Stock Alert Settings */}
-              <div className="grid grid-cols-2 gap-2.5">
+              {/* Stock, Low Stock Alert Settings & Expiry Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div>
                   <label className="block text-slate-300 font-bold mb-1">
                     الرصيد الحالي (بالـ{isDualUnitMode ? (formData.minorUnit || 'قطعة') : (formData.majorUnit || 'وحدة')})
@@ -1582,7 +1732,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                 <div>
                   <label className="block text-amber-300 font-bold mb-1 flex items-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                    <span>حد التنبيه (بالـ{isDualUnitMode ? (formData.minorUnit || 'قطعة') : (formData.majorUnit || 'وحدة')})</span>
+                    <span>حد التنبيه (حد الطلب)</span>
                   </label>
                   <input
                     type="number"
@@ -1590,6 +1740,19 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({
                     value={formData.minStockAlert ?? 10}
                     onChange={(e) => setFormData({ ...formData, minStockAlert: parseInt(e.target.value) || 0 })}
                     className="w-full bg-slate-800 border border-amber-500/50 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-purple-300 font-bold mb-1 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-purple-400" />
+                    <span>تاريخ انتهاء الصلاحية</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.expiryDate || ''}
+                    onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
+                    className="w-full bg-slate-800 border border-purple-500/50 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-purple-500"
                   />
                 </div>
               </div>

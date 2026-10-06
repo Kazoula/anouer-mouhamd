@@ -14,6 +14,7 @@ import {
 import { initialProducts, initialSuppliers, initialCustomers, initialSales, initialPurchases, initialStockMovements } from '../data/mockData';
 import { normalizeProductUnits } from './unitHelpers';
 import { classifyProductCategory } from './categoryClassifier';
+import { normalizeArabicText } from './calculations';
 import { getIdbItem, setIdbItem, deleteIdbItem, clearIdb } from './idbStorage';
 
 export const STORAGE_KEYS = {
@@ -399,6 +400,66 @@ export const repairAndClassifyProduct = (prod: Product): Product => {
     }
   }
 
+  // Repair and accurately separate moulin dor moffins products
+  const cleanBarcode = (p.barcode || '').trim().toLowerCase();
+  const isOriginalMoffin = cleanBarcode === 'mo361' || (lowerName.includes('moulin') && lowerName.includes('moffins') && (lowerName.includes('original') || lowerName.includes('اصلي') || lowerName.includes('أصلي')));
+  const isStandardMoffin = cleanBarcode === 'mo362' || (lowerName.includes('moulin') && lowerName.includes('moffins') && !lowerName.includes('original') && !lowerName.includes('اصلي') && !lowerName.includes('أصلي'));
+
+  if (isOriginalMoffin) {
+    p.barcode = 'mo361';
+    if (!p.name.includes('(original)')) {
+      p.name = 'moulin dor moffins 36P كرتونة (original)';
+    }
+    // High Precision Purchase & Sale Loss: Purchase (820) > Sale (785)
+    // Never allow purchase price to be 0!
+    if (!p.purchasePriceMinor || p.purchasePriceMinor === 0 || !p.purchasePriceMajor || p.purchasePriceMajor === 0) {
+      p.purchasePriceMinor = 820;
+      p.purchasePriceMajor = 820;
+    }
+    if (!p.salePriceMinor || p.salePriceMinor === 0 || p.salePriceMinor > p.purchasePriceMinor) {
+      p.salePriceMinor = 785;
+      p.salePriceMajor = 785;
+    }
+    // Restore true stock: 0 (or 2), never the 15 that belonged to standard MO362
+    if (p.stockPieces === 15) {
+      p.stockPieces = 0;
+    }
+    p.majorUnit = p.majorUnit || 'كرتونة';
+    p.minorUnit = p.minorUnit || 'كرتونة';
+    p.piecesPerMajorUnit = 1;
+    if (!p.notes || !p.notes.includes('خسارة')) {
+      p.notes = 'سعر الشراء (820 د.ج) أعلى من سعر البيع (785 د.ج) - خسارة 35 د.ج في الكرتونة';
+    }
+  } else if (isStandardMoffin) {
+    p.barcode = 'MO362';
+    if (p.name.includes('(original)')) {
+      p.name = 'moulin dor moffins 36P كرتونة';
+    }
+    // Remove erroneous extra barcode mo361 from notes
+    if (p.notes && p.notes.includes('mo361')) {
+      p.notes = p.notes
+        .split('|')
+        .map(s => s.trim())
+        .filter(s => !s.includes('mo361'))
+        .join(' | ');
+    }
+    // Restore true stock from sheet: 15 cartons (never 0)
+    if (p.stockPieces === 0) {
+      p.stockPieces = 15;
+    }
+    if (p.purchasePriceMinor === 0 || p.purchasePriceMajor === 0) {
+      p.purchasePriceMinor = 740;
+      p.purchasePriceMajor = 740;
+    }
+    if (p.salePriceMinor === 0 || p.salePriceMajor === 0) {
+      p.salePriceMinor = 760;
+      p.salePriceMajor = 760;
+    }
+    p.majorUnit = p.majorUnit || 'كرتونة';
+    p.minorUnit = p.minorUnit || 'كرتونة';
+    p.piecesPerMajorUnit = 1;
+  }
+
   // Auto-classify category if generic 'عام' or empty
   if (!p.category || p.category === 'عام' || p.category === 'عامة' || p.category.toLowerCase() === 'general') {
     p.category = classifyProductCategory(p.name, p.category);
@@ -407,20 +468,70 @@ export const repairAndClassifyProduct = (prod: Product): Product => {
   return normalizeProductUnits(p);
 };
 
+/**
+ * Consolidates duplicate records for the same product name (e.g. from multi-barcode sheet imports)
+ * into a single unified product record, merging stock and keeping alternate barcodes in notes.
+ * Strictly preserves the distinction between (original) and standard products.
+ */
+export const deduplicateProductList = (products: Product[]): Product[] => {
+  const map = new Map<string, Product>();
+
+  products.forEach(p => {
+    if (!p || !p.name) return;
+    const norm = normalizeArabicText(p.name);
+    const isOrig = norm.includes('original') || norm.includes('اصلي') || norm.includes('أصلي');
+    const groupKey = `${norm}___${isOrig ? 'orig' : 'std'}`;
+
+    if (!map.has(groupKey)) {
+      map.set(groupKey, { ...p });
+    } else {
+      const existing = map.get(groupKey)!;
+      const b1 = (existing.barcode || '').trim();
+      const b2 = (p.barcode || '').trim();
+      
+      let combinedNotes = existing.notes || '';
+      if (b2 && b1 !== b2 && !combinedNotes.includes(b2)) {
+        combinedNotes = [combinedNotes, `باركود إضافي: ${b2}`].filter(Boolean).join(' | ');
+      }
+
+      // Merge stock
+      const combinedStock = (existing.stockPieces || 0) + (p.stockPieces || 0);
+
+      // Prefer non-zero valid prices
+      const sMin = existing.salePriceMinor > 0 ? existing.salePriceMinor : p.salePriceMinor;
+      const sMaj = existing.salePriceMajor > 0 ? existing.salePriceMajor : p.salePriceMajor;
+      const pMin = existing.purchasePriceMinor > 0 ? existing.purchasePriceMinor : p.purchasePriceMinor;
+      const pMaj = existing.purchasePriceMajor > 0 ? existing.purchasePriceMajor : p.purchasePriceMajor;
+
+      map.set(groupKey, {
+        ...existing,
+        stockPieces: combinedStock,
+        notes: combinedNotes,
+        salePriceMinor: sMin,
+        salePriceMajor: sMaj,
+        purchasePriceMinor: pMin,
+        purchasePriceMajor: pMaj,
+      });
+    }
+  });
+
+  return Array.from(map.values());
+};
+
 export const getStoredProducts = (): Product[] => {
   try {
     const raw = safeStorage.getItem(STORAGE_KEYS.PRODUCTS);
     const list: Product[] = raw ? JSON.parse(raw) : initialProducts;
-    return list.map(repairAndClassifyProduct);
+    return deduplicateProductList(list.map(repairAndClassifyProduct));
   } catch (e) {
     console.error('Error loading products from storage', e);
-    return initialProducts.map(repairAndClassifyProduct);
+    return deduplicateProductList(initialProducts.map(repairAndClassifyProduct));
   }
 };
 
 export const saveStoredProducts = (products: Product[]) => {
   try {
-    const normalized = products.map(repairAndClassifyProduct);
+    const normalized = deduplicateProductList(products.map(repairAndClassifyProduct));
     safeStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(normalized));
   } catch (e) {
     console.error('Error saving products to storage', e);

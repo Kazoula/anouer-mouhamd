@@ -90,11 +90,9 @@ export const FloatingCornerRefresh: React.FC<FloatingCornerRefreshProps> = ({
         }}
       >
         <div className="relative group flex items-center">
-          {/* Main Floating Button */}
-          <button
+          {/* Main Floating Capsule */}
+          <div
             id="floating-corner-refresh-button"
-            type="button"
-            onClick={() => triggerFastRefresh(false)}
             onContextMenu={(e) => {
               e.preventDefault();
               setShowMenu(!showMenu);
@@ -105,35 +103,42 @@ export const FloatingCornerRefresh: React.FC<FloatingCornerRefreshProps> = ({
               backdropFilter: 'blur(8px)', 
               WebkitBackdropFilter: 'blur(8px)' 
             }}
-            className={`relative flex items-center gap-1.5 px-3 py-2 rounded-2xl border transition-all duration-300 shadow-xl cursor-pointer active:scale-95 group ${
+            className={`relative flex items-center gap-1.5 px-3 py-2 rounded-2xl border transition-all duration-300 shadow-xl select-none group ${
               activeRefreshing
                 ? 'bg-emerald-600/90 border-emerald-400 text-white shadow-emerald-500/40 ring-2 ring-emerald-400/50 scale-105'
                 : 'bg-slate-900/90 dark:bg-black/90 hover:bg-slate-850 dark:hover:bg-slate-900 border-teal-500/50 hover:border-teal-400 text-teal-300 shadow-[0_8px_25px_rgba(20,184,166,0.25)]'
             }`}
-            title="إنعاش وتسريع التطبيق عند البطء (انقر باليمين أو اضغط مطولاً لخيارات إضافية)"
-            aria-label="تحديث وتسريع التطبيق"
           >
-            {/* Spinning/pulsing icon */}
-            <div className="relative flex items-center justify-center">
-              <RotateCw 
-                className={`w-4 h-4 sm:w-4.5 sm:h-4.5 transition-transform duration-700 ${
-                  activeRefreshing ? 'animate-spin text-white' : 'text-teal-400 group-hover:rotate-180'
-                }`} 
-              />
-              <Zap className="w-2 h-2 text-amber-400 absolute fill-amber-400 animate-pulse" />
-            </div>
+            {/* Clickable Area for Refresh */}
+            <button
+              type="button"
+              onClick={() => triggerFastRefresh(false)}
+              className="flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
+              title="إنعاش وتسريع التطبيق عند البطء (انقر باليمين أو اضغط مطولاً لخيارات إضافية)"
+              aria-label="تحديث وتسريع التطبيق"
+            >
+              {/* Spinning/pulsing icon */}
+              <div className="relative flex items-center justify-center">
+                <RotateCw 
+                  className={`w-4 h-4 sm:w-4.5 sm:h-4.5 transition-transform duration-700 ${
+                    activeRefreshing ? 'animate-spin text-white' : 'text-teal-400 group-hover:rotate-180'
+                  }`} 
+                />
+                <Zap className="w-2 h-2 text-amber-400 absolute fill-amber-400 animate-pulse" />
+              </div>
 
-            {/* Micro Badge Text: Instant Speed */}
-            <span className="font-extrabold text-[11px] sm:text-xs text-white tracking-tight flex items-center gap-1">
-              <span>تسريع</span>
-              <span className="text-[9px] text-teal-300 font-bold hidden min-[360px]:inline">⚡</span>
-            </span>
+              {/* Micro Badge Text: Instant Speed */}
+              <span className="font-extrabold text-[11px] sm:text-xs text-white tracking-tight flex items-center gap-1">
+                <span>تسريع</span>
+                <span className="text-[9px] text-teal-300 font-bold hidden min-[360px]:inline">⚡</span>
+              </span>
 
-            {/* Glowing Active Status Dot */}
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-gradient-to-r from-teal-400 to-emerald-400"></span>
-            </span>
+              {/* Glowing Active Status Dot */}
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-gradient-to-r from-teal-400 to-emerald-400"></span>
+              </span>
+            </button>
 
             {/* Menu Opener Arrow */}
             <button
@@ -142,12 +147,13 @@ export const FloatingCornerRefresh: React.FC<FloatingCornerRefreshProps> = ({
                 e.stopPropagation();
                 setShowMenu(!showMenu);
               }}
-              className="pr-0.5 text-teal-400/80 hover:text-white transition-colors"
+              className="pr-0.5 text-teal-400/80 hover:text-white transition-colors cursor-pointer active:scale-90"
               title="خيارات إضافية"
+              aria-label="خيارات إضافية للتسريع والإنعاش"
             >
               <ChevronUp className={`w-3.5 h-3.5 transition-transform ${showMenu ? 'rotate-180 text-teal-300' : ''}`} />
             </button>
-          </button>
+          </div>
 
           {/* Quick Context Popup Menu */}
           {showMenu && (
